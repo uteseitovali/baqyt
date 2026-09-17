@@ -161,6 +161,7 @@ export default function ProfilePage() {
                 {(Object.keys(TRACKS) as TrackId[]).map((id) => (
                   <OptionCard
                     key={id}
+                    single
                     selected={profile.track === id}
                     onSelect={() => setProfile({ track: id })}
                     title={TRACKS[id].label}
@@ -202,6 +203,7 @@ export default function ProfilePage() {
                 ).map((option) => (
                   <OptionCard
                     key={option.id}
+                    single
                     selected={profile.academics.gpaBand === option.id}
                     onSelect={() => patchAcademics({ gpaBand: option.id })}
                     title={option.label}
@@ -317,6 +319,7 @@ export default function ProfilePage() {
                   ).map((option) => (
                     <OptionCard
                       key={option.id}
+                      single
                       selected={profile.languages.englishSelf === option.id}
                       onSelect={() => patchLanguages({ englishSelf: option.id })}
                       title={option.label}

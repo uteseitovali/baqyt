@@ -45,6 +45,9 @@ export function OptionCard({
   hint,
   compact = false,
   disabled = false,
+  // Одиночный выбор должен объявляться как radio, множественный — как checkbox:
+  // скринридер иначе неверно сообщает правила выбора.
+  single = false,
 }: {
   selected: boolean;
   onSelect: () => void;
@@ -52,11 +55,12 @@ export function OptionCard({
   hint?: string;
   compact?: boolean;
   disabled?: boolean;
+  single?: boolean;
 }) {
   return (
     <button
       type="button"
-      role="checkbox"
+      role={single ? "radio" : "checkbox"}
       aria-checked={selected}
       disabled={disabled}
       onClick={onSelect}

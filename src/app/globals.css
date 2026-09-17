@@ -1,26 +1,393 @@
 @import "tailwindcss";
 
+/* ============================================================================
+   BAGYT — авторская дизайн-система
+   Концепция: «маршрутная карта». Тёплая бумага + густые чернила + сигнальный
+   оранжевый акцент. Микро-лейблы моноширинным, заголовки — плотный гротеск.
+   Все цвета заданы токенами и переопределяются для тёмной темы в одном месте.
+   ========================================================================= */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* — поверхности —————————————————————————————————————————————— */
+  --canvas: #fbfaf7;
+  --surface: #ffffff;
+  --surface-sunken: #f3f1ec;
+  --surface-raised: #ffffff;
+
+  /* — чернила ——————————————————————————————————————————————————— */
+  --ink: #14161a;
+  --ink-muted: #5c6068;
+  --ink-faint: #8e9299;
+
+  /* — линии ————————————————————————————————————————————————————— */
+  --line: rgb(20 22 26 / 0.1);
+  --line-strong: rgb(20 22 26 / 0.18);
+
+  /* — акцент (бренд) ———————————————————————————————————————————— */
+  --accent: #dc4b1e;
+  --accent-hover: #c33f16;
+  --accent-soft: #fceee7;
+  --accent-border: rgb(220 75 30 / 0.28);
+  --on-accent: #fffaf7;
+
+  /* — семантика посадки (band) ——————————————————————————————————— */
+  --band-safe: #2f7a57;
+  --band-safe-soft: #e8f2ec;
+  --band-target: #2c5c8a;
+  --band-target-soft: #e7eff6;
+  --band-reach: #7a4a8c;
+  --band-reach-soft: #f1eaf4;
+
+  /* — семантика факторов ———————————————————————————————————————— */
+  --f-strong: #2f7a57;
+  --f-ok: #a8791a;
+  --f-weak: #6b7280;
+  --f-track: rgb(20 22 26 / 0.08);
+
+  /* — состояния ————————————————————————————————————————————————— */
+  --danger: #b3321f;
+  --danger-soft: #fbeae7;
+  --focus: #dc4b1e;
+
+  /* — тени —————————————————————————————————————————————————————— */
+  --shadow-sm: 0 1px 2px rgb(20 22 26 / 0.05);
+  --shadow-md: 0 1px 2px rgb(20 22 26 / 0.04), 0 4px 12px rgb(20 22 26 / 0.06);
+  --shadow-lg: 0 1px 2px rgb(20 22 26 / 0.04), 0 8px 28px rgb(20 22 26 / 0.09);
+  --shadow-pop: 0 2px 4px rgb(20 22 26 / 0.06), 0 16px 48px rgb(20 22 26 / 0.14);
+
+  /* — радиусы ——————————————————————————————————————————————————— */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+
+  /* — ритм —————————————————————————————————————————————————————— */
+  --rail: 2px;
+  --page-max: 1180px;
+
+  /* — шрифты (self-hosted, fontsource) ————————————————————————— */
+  --font-manrope: "Manrope Variable";
+  --font-jetbrains: "JetBrains Mono Variable";
+
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root[data-theme="dark"],
+:root:not([data-theme="light"]) {
+  /* по умолчанию светлая; тёмная включается атрибутом или системой (ниже) */
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    --canvas: #0e0f12;
+    --surface: #16181d;
+    --surface-sunken: #121419;
+    --surface-raised: #1b1e24;
+
+    --ink: #f2f0eb;
+    --ink-muted: #a2a6ae;
+    --ink-faint: #767b84;
+
+    --line: rgb(242 240 235 / 0.11);
+    --line-strong: rgb(242 240 235 / 0.2);
+
+    --accent: #ff7a4d;
+    --accent-hover: #ff9068;
+    --accent-soft: rgb(255 122 77 / 0.12);
+    --accent-border: rgb(255 122 77 / 0.34);
+    --on-accent: #1a0d07;
+
+    --band-safe: #62c295;
+    --band-safe-soft: rgb(98 194 149 / 0.14);
+    --band-target: #6aaae4;
+    --band-target-soft: rgb(106 170 228 / 0.14);
+    --band-reach: #bb92cd;
+    --band-reach-soft: rgb(187 146 205 / 0.14);
+
+    --f-strong: #62c295;
+    --f-ok: #d9a93f;
+    --f-weak: #8b919b;
+    --f-track: rgb(242 240 235 / 0.09);
+
+    --danger: #f0836e;
+    --danger-soft: rgb(240 131 110 / 0.13);
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.36);
+    --shadow-lg: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 28px rgb(0 0 0 / 0.45);
+    --shadow-pop: 0 2px 4px rgb(0 0 0 / 0.5), 0 16px 48px rgb(0 0 0 / 0.55);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --canvas: #0e0f12;
+  --surface: #16181d;
+  --surface-sunken: #121419;
+  --surface-raised: #1b1e24;
+
+  --ink: #f2f0eb;
+  --ink-muted: #a2a6ae;
+  --ink-faint: #767b84;
+
+  --line: rgb(242 240 235 / 0.11);
+  --line-strong: rgb(242 240 235 / 0.2);
+
+  --accent: #ff7a4d;
+  --accent-hover: #ff9068;
+  --accent-soft: rgb(255 122 77 / 0.12);
+  --accent-border: rgb(255 122 77 / 0.34);
+  --on-accent: #1a0d07;
+
+  --band-safe: #62c295;
+  --band-safe-soft: rgb(98 194 149 / 0.14);
+  --band-target: #6aaae4;
+  --band-target-soft: rgb(106 170 228 / 0.14);
+  --band-reach: #bb92cd;
+  --band-reach-soft: rgb(187 146 205 / 0.14);
+
+  --f-strong: #62c295;
+  --f-ok: #d9a93f;
+  --f-weak: #8b919b;
+  --f-track: rgb(242 240 235 / 0.09);
+
+  --danger: #f0836e;
+  --danger-soft: rgb(240 131 110 / 0.13);
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.36);
+  --shadow-lg: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 28px rgb(0 0 0 / 0.45);
+  --shadow-pop: 0 2px 4px rgb(0 0 0 / 0.5), 0 16px 48px rgb(0 0 0 / 0.55);
+
+  color-scheme: dark;
+}
+
+/* ——— Маппинг токенов в утилиты Tailwind ——————————————————————————— */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-sunken: var(--surface-sunken);
+  --color-raised: var(--surface-raised);
+
+  --color-ink: var(--ink);
+  --color-muted: var(--ink-muted);
+  --color-faint: var(--ink-faint);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-border: var(--accent-border);
+  --color-on-accent: var(--on-accent);
+
+  --color-safe: var(--band-safe);
+  --color-safe-soft: var(--band-safe-soft);
+  --color-target: var(--band-target);
+  --color-target-soft: var(--band-target-soft);
+  --color-reach: var(--band-reach);
+  --color-reach-soft: var(--band-reach-soft);
+
+  --color-f-strong: var(--f-strong);
+  --color-f-ok: var(--f-ok);
+  --color-f-weak: var(--f-weak);
+  --color-f-track: var(--f-track);
+
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  --radius-xs: var(--r-xs);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+
+  --shadow-card: var(--shadow-md);
+  --shadow-float: var(--shadow-lg);
+  --shadow-pop: var(--shadow-pop);
+}
+
+/* ——— База ————————————————————————————————————————————————————————— */
+* {
+  border-color: var(--line);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100dvh;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+/* ——— Типографические классы системы ————————————————————————————— */
+.t-display {
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+.t-title {
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.t-body {
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+/* Микро-лейбл — узнаваемый элемент системы */
+.t-label {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.t-num {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ——— Сигнатурный элемент: маршрутная линия ——————————————————————— */
+.rail-line {
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--rail-progress, 0%),
+    var(--f-track) var(--rail-progress, 0%),
+    var(--f-track) 100%
+  );
+}
+
+/* Пунктирный «путь» между вехами roadmap */
+.rail-dotted {
+  background-image: linear-gradient(
+    to bottom,
+    var(--line-strong) 0 4px,
+    transparent 4px 10px
+  );
+  background-size: 1px 10px;
+  background-repeat: repeat-y;
+}
+
+/* ——— Утилиты —————————————————————————————————————————————————————— */
+.surface-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.hairline {
+  border-color: var(--line);
+}
+
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    var(--line-strong) 1px,
+    transparent 0
+  );
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 20%, transparent 75%);
+}
+
+/* Скрыть скроллбар у горизонтальных лент (мобильный rail) */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Анимация появления карточек */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-rise {
+  animation: rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--f-track);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.18),
+    transparent
+  );
+  animation: shimmer 1.6s infinite;
 }

@@ -13,7 +13,7 @@ import {
 import { RequireProfile } from "@/components/shell/RequireProfile";
 import { MatchCard } from "@/components/matches/MatchCard";
 import { TweakPanel } from "@/components/matches/TweakPanel";
-import { PROGRAMS } from "@/lib/data/programs";
+import { getCatalog } from "@/lib/data/programs";
 import { balancedShortlist, rankPrograms } from "@/lib/domain/scoring";
 import { useJourney } from "@/lib/store/journey";
 import { cn } from "@/lib/utils/cn";
@@ -52,8 +52,10 @@ export function MatchesView() {
   const [explaining, setExplaining] = useState(false);
 
   // Пересчёт синхронный — это и есть «заметная реакция на изменение вводных».
+  // getCatalog() отдаёт снапшот, который к этому моменту уже заполнен:
+  // из базы, если она подключена, иначе статическим срезом.
   const allMatches = useMemo(
-    () => rankPrograms(profile, PROGRAMS, { limit: 14, hideBlocked }),
+    () => rankPrograms(profile, getCatalog(), { limit: 14, hideBlocked }),
     [profile, hideBlocked],
   );
 

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { JourneyRail } from "./JourneyRail";
 import { cn } from "@/lib/utils/cn";
 import { useJourney } from "@/lib/store/journey";
+import { useSession } from "@/lib/store/session";
 
 /* ============================================================================
    Оболочка приложения: шапка с логотипом и темой, маршрутная лента, подвал
@@ -116,6 +117,58 @@ function ResetButton() {
   );
 }
 
+/**
+ * Точка входа в аккаунт. Без подключённой базы не показывается вовсе:
+ * предлагать вход там, где его нет, — обман интерфейса.
+ */
+function AccountButton() {
+  const authEnabled = useSession((s) => s.authEnabled);
+  const status = useSession((s) => s.status);
+  const user = useSession((s) => s.user);
+  const sync = useSession((s) => s.sync);
+  const setUser = useSession((s) => s.setUser);
+
+  if (!authEnabled || status === "unknown") return null;
+
+  if (status === "guest") {
+    return (
+      <Link
+        href="/login"
+        className="h-9 rounded-[10px] border border-line bg-surface px-3 text-[12.5px] font-semibold leading-9 text-muted transition-colors hover:border-line-strong hover:text-ink"
+      >
+        Войти
+      </Link>
+    );
+  }
+
+  const syncLabel: Record<string, string> = {
+    syncing: "сохраняем…",
+    saved: "сохранено",
+    error: "не сохранилось",
+    idle: "синхронизировано",
+    off: "",
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="hidden text-[12px] text-faint md:block" title={user?.email}>
+        {user?.email} · {syncLabel[sync]}
+      </span>
+      <button
+        onClick={() => {
+          void fetch("/api/auth/logout", { method: "POST" }).finally(() => {
+            // Локальный прогресс остаётся: выход из аккаунта — не сброс пути.
+            setUser(null);
+          });
+        }}
+        className="h-9 rounded-[10px] border border-line bg-surface px-3 text-[12.5px] font-semibold text-muted transition-colors hover:border-line-strong hover:text-ink"
+      >
+        Выйти
+      </button>
+    </div>
+  );
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isIntro = pathname === "/";
@@ -129,6 +182,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="hidden text-[12.5px] text-faint sm:block">
               Персональный маршрут поступления
             </span>
+            <AccountButton />
             <ResetButton />
             <ThemeToggle />
           </div>

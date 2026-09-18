@@ -1158,10 +1158,61 @@ export const PROGRAMS: Program[] = [
   },
 ];
 
+/* ============================================================================
+   АКТИВНЫЙ СНАПШОТ КАТАЛОГА
+
+   Массив выше — не источник правды, а базовый срез: с него начинается любой
+   процесс и им же всё заканчивается, если базы нет. Поверх него живёт
+   снапшот, который сервер заполняет из Postgres (src/lib/data/catalog.server.ts)
+   и передаёт в браузер через CatalogProvider.
+
+   Почему снапшот, а не async-функции: и тесты домена, и клиентские страницы
+   читают каталог синхронно (`rankPrograms(profile, PROGRAMS)` на каждый сдвиг
+   ползунка в «Живой настройке»). Асинхронный доступ означал бы await в
+   пересчёте, ради которого вся эта архитектура и затевалась — мгновенный
+   отклик без сети. Поэтому загрузка асинхронная и происходит один раз до
+   отрисовки, а чтение остаётся синхронным.
+
+   Модуль изоморфный: ни драйвера базы, ни React, ни сети. На сервере снапшот
+   общий на процесс — это безопасно, каталог одинаков для всех пользователей
+   и не содержит ничего персонального.
+   ========================================================================= */
+
+/** Откуда пришли данные, которые пользователь видит прямо сейчас. */
+export type CatalogSource = "static" | "db";
+
+let activeCatalog: Program[] = PROGRAMS;
+let activeSource: CatalogSource = "static";
+
+/** Текущий каталог: из базы, если она подключена, иначе статический срез. */
+export function getCatalog(): Program[] {
+  return activeCatalog;
+}
+
+export function getCatalogSource(): CatalogSource {
+  return activeSource;
+}
+
+/**
+ * Подменяет активный снапшот. Вызывается загрузчиком на сервере и провайдером
+ * в браузере. Пустой список игнорируется: пустая витрина хуже устаревшей.
+ */
+export function setCatalog(programs: Program[], source: CatalogSource): void {
+  if (programs.length === 0) return;
+  activeCatalog = programs;
+  activeSource = source;
+}
+
+/** Возврат к статическому срезу — для тестов и аварийной деградации. */
+export function resetCatalog(): void {
+  activeCatalog = PROGRAMS;
+  activeSource = "static";
+}
+
 /* ——— Утилиты доступа ————————————————————————————————————————————— */
 
 export function getProgramById(id: string): Program | undefined {
-  return PROGRAMS.find((p) => p.id === id);
+  return activeCatalog.find((p) => p.id === id);
 }
 
 export function getProgramsByIds(ids: string[]): Program[] {
@@ -1170,11 +1221,36 @@ export function getProgramsByIds(ids: string[]): Program[] {
     .filter((p): p is Program => Boolean(p));
 }
 
+/** Самая поздняя дата фиксации в срезе — её показываем как «данные на». */
+function latestCheckedOn(programs: Program[]): string {
+  return programs.reduce(
+    (latest, p) => (p.source.checkedOn > latest ? p.source.checkedOn : latest),
+    CHECKED,
+  );
+}
+
+/**
+ * Сводка по каталогу. Поля — геттеры, а не снятые один раз значения: иначе
+ * после подключения базы интерфейс продолжил бы показывать цифры
+ * статического среза. Форма объекта не менялась, обращения вида
+ * `CATALOG_META.total` работают как раньше.
+ */
 export const CATALOG_META = {
-  total: PROGRAMS.length,
-  countries: new Set(PROGRAMS.map((p) => p.country)).size,
-  universities: new Set(PROGRAMS.map((p) => p.university)).size,
-  checkedOn: CHECKED,
+  get total() {
+    return activeCatalog.length;
+  },
+  get countries() {
+    return new Set(activeCatalog.map((p) => p.country)).size;
+  },
+  get universities() {
+    return new Set(activeCatalog.map((p) => p.university)).size;
+  },
+  get checkedOn() {
+    return latestCheckedOn(activeCatalog);
+  },
+  get source(): CatalogSource {
+    return activeSource;
+  },
   disclaimer:
     "Кураторский демонстрационный срез. Требования, стоимость и даты подтверждайте на официальных страницах вузов — ссылка есть у каждой программы.",
 };

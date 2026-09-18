@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getProgramById } from "@/lib/data/programs";
+import { loadCatalog } from "@/lib/data/catalog.server";
 import { buildRoadmap } from "@/lib/domain/roadmap";
 import { scoreProgram } from "@/lib/domain/scoring";
 import { asProfile, roadmapRequestSchema } from "@/lib/domain/validation";
@@ -30,7 +30,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const program = getProgramById(parsed.data.programId);
+  const { programs } = await loadCatalog();
+  const program = programs.find((p) => p.id === parsed.data.programId);
   if (!program) {
     return NextResponse.json(
       { error: `Программа ${parsed.data.programId} не найдена в каталоге` },

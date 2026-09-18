@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PROGRAMS } from "@/lib/data/programs";
+import { loadCatalog } from "@/lib/data/catalog.server";
 import { balancedShortlist, rankPrograms } from "@/lib/domain/scoring";
 import { asProfile, recommendRequestSchema } from "@/lib/domain/validation";
 import { enrichMatchExplanations } from "@/lib/ai/enrich";
@@ -39,7 +39,8 @@ export async function POST(request: Request) {
 
   const startedAt = Date.now();
   const profile = asProfile(parsed.data.profile);
-  const matches = rankPrograms(profile, PROGRAMS, {
+  const catalog = await loadCatalog();
+  const matches = rankPrograms(profile, catalog.programs, {
     limit: parsed.data.limit ?? 12,
     hideBlocked: parsed.data.hideBlocked ?? false,
   });
@@ -61,7 +62,8 @@ export async function POST(request: Request) {
     meta: {
       explanationSource,
       aiEnabled: isAIEnabled(),
-      catalogSize: PROGRAMS.length,
+      catalogSize: catalog.programs.length,
+      catalogSource: catalog.source,
       tookMs: Date.now() - startedAt,
     },
   });

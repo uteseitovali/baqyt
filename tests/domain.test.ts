@@ -6,7 +6,10 @@ import { rankPrograms, scoreProgram, balancedShortlist } from "../src/lib/domain
 import { buildDiagnosis } from "../src/lib/domain/diagnosis";
 import { buildRoadmap, nextAction, roadmapProgress } from "../src/lib/domain/roadmap";
 import { profileSchema } from "../src/lib/domain/validation";
-import type { Profile } from "../src/lib/domain/types";
+import { programSchema } from "../src/lib/data/schema";
+import { detectRealityCheck } from "../src/lib/domain/realityCheck";
+import { applyRealityCheckRewrite } from "../src/lib/ai/enrich";
+import type { Profile, RealityCheckFinding } from "../src/lib/domain/types";
 
 /* ============================================================================
    Тесты доменного слоя.
@@ -362,5 +365,394 @@ test("валидация: мусор отклоняется", () => {
       academics: { ...baseProfile().academics, predictedIB: 99 },
     }).success,
     false,
+  );
+});
+
+/* ——— Проверка реальности ————————————————————————————————————————— */
+
+test("проверка реальности: согласованный профиль не даёт находок", () => {
+  assert.deepEqual(detectRealityCheck(baseProfile()), []);
+});
+
+test("проверка реальности: направление расходится с сильными предметами", () => {
+  const profile = baseProfile({
+    academics: {
+      gpaBand: "high",
+      predictedIB: 36,
+      strongSubjects: ["История", "Литература"],
+    },
+    preferences: { ...baseProfile().preferences, fields: ["cs"] },
+  });
+
+  const findings = detectRealityCheck(profile);
+  const finding = findings.find((f) => f.id === "field-vs-subjects");
+
+  assert.ok(finding, "расхождение направления и предметов должно быть найдено");
+  assert.ok(finding.conflict.length > 40, "конфликт должен быть описан словами");
+  assert.ok(
+    finding.conflict.includes("История") || finding.conflict.includes("Литература"),
+    "в описании конфликта должны быть предметы самого абитуриента",
+  );
+  assert.ok(
+    finding.resolutions.length >= 2 && finding.resolutions.length <= 3,
+    `вариантов должно быть 2–3, а не ${finding.resolutions.length}`,
+  );
+});
+
+test("проверка реальности: бюджет не дотягивает до выбранного направления", () => {
+  const profile = baseProfile({
+    budget: { annualTuitionUSD: 4000, needsFunding: false, livingCoveredUSD: 3000 },
+    preferences: { ...baseProfile().preferences, fields: ["design"] },
+  });
+
+  const finding = detectRealityCheck(profile).find((f) => f.id === "budget-vs-field");
+
+  assert.ok(finding, "конфликт бюджета и направления должен быть найден");
+  assert.ok(
+    finding.conflict.includes("4"),
+    "в описании должен быть собственный потолок абитуриента",
+  );
+  assert.ok(finding.resolutions.length >= 2);
+});
+
+test("проверка реальности: английское обучение при базовом английском без теста", () => {
+  const profile = baseProfile({
+    languages: { englishSelf: "basic", kazakh: "fluent", russian: "fluent" },
+    preferences: {
+      ...baseProfile().preferences,
+      countries: ["GB"],
+      instructionLanguages: ["en"],
+    },
+  });
+
+  const finding = detectRealityCheck(profile).find((f) => f.id === "language-vs-plan");
+  assert.ok(finding, "разрыв между языком обучения и уровнем должен быть найден");
+});
+
+test("проверка реальности: у каждой находки 2–3 варианта с уникальными id", () => {
+  const profiles = [
+    baseProfile(),
+    baseProfile({
+      academics: { gpaBand: "mid", strongSubjects: ["История", "Литература"] },
+      preferences: { ...baseProfile().preferences, fields: ["cs"] },
+    }),
+    baseProfile({
+      track: "national",
+      academics: { gpaBand: "mid", strongSubjects: [] },
+      languages: { englishSelf: "basic", kazakh: "fluent", russian: "fluent" },
+      budget: { annualTuitionUSD: 3000, needsFunding: true, livingCoveredUSD: 1000 },
+      preferences: {
+        ...baseProfile().preferences,
+        countries: ["GB", "NL"],
+        fields: ["medicine", "design"],
+        instructionLanguages: ["en"],
+      },
+    }),
+  ];
+
+  for (const profile of profiles) {
+    const findings = detectRealityCheck(profile);
+    assert.ok(findings.length <= 3, `находок слишком много: ${findings.length}`);
+    for (const finding of findings) {
+      assert.ok(finding.title.length > 5, `${finding.id}: пустой заголовок`);
+      assert.ok(
+        finding.resolutions.length >= 2 && finding.resolutions.length <= 3,
+        `${finding.id}: ${finding.resolutions.length} вариантов`,
+      );
+      const ids = new Set(finding.resolutions.map((r) => r.id));
+      assert.equal(ids.size, finding.resolutions.length, `${finding.id}: дубли id`);
+      for (const resolution of finding.resolutions) {
+        assert.ok(resolution.title.length > 3, `${finding.id}: вариант без заголовка`);
+        assert.ok(resolution.detail.length > 20, `${finding.id}: вариант без сути`);
+      }
+    }
+  }
+});
+
+test("проверка реальности: детерминирована и попадает в диагностику", () => {
+  const profile = baseProfile({
+    academics: { gpaBand: "high", strongSubjects: ["История", "Литература"] },
+    preferences: { ...baseProfile().preferences, fields: ["cs"] },
+  });
+
+  assert.deepEqual(detectRealityCheck(profile), detectRealityCheck(profile));
+  assert.deepEqual(buildDiagnosis(profile).realityChecks, detectRealityCheck(profile));
+  assert.deepEqual(buildDiagnosis(baseProfile()).realityChecks, []);
+});
+
+/* ——— Границы LLM-переписывания ——————————————————————————————————— */
+
+function findings(): RealityCheckFinding[] {
+  return detectRealityCheck(
+    baseProfile({
+      academics: { gpaBand: "high", strongSubjects: ["История", "Литература"] },
+      preferences: { ...baseProfile().preferences, fields: ["cs"] },
+    }),
+  );
+}
+
+test("переписывание: живой текст применяется, структура сохраняется", () => {
+  const base = findings();
+  const target = base[0];
+
+  const applied = applyRealityCheckRewrite(base, [
+    {
+      id: target.id,
+      conflict: "Переписанное описание конфликта живым языком для абитуриента.",
+      resolutions: target.resolutions.map((r, i) => ({
+        id: r.id,
+        title: `Вариант ${i + 1}`,
+        detail: `Переписанный вариант номер ${i + 1} обычным человеческим языком.`,
+      })),
+    },
+  ]);
+
+  assert.equal(applied.length, base.length);
+  assert.equal(applied[0].conflict, "Переписанное описание конфликта живым языком для абитуриента.");
+  assert.deepEqual(
+    applied[0].resolutions.map((r) => r.id),
+    target.resolutions.map((r) => r.id),
+    "id и порядок вариантов трогать нельзя",
+  );
+  assert.equal(applied[0].resolutions[0].title, "Вариант 1");
+});
+
+test("переписывание: выдуманная находка игнорируется", () => {
+  const base = findings();
+  const applied = applyRealityCheckRewrite(base, [
+    {
+      id: "выдуманный-конфликт",
+      conflict: "Модель придумала совершенно новый конфликт, которого не было.",
+      resolutions: [
+        { id: "a", title: "Выдумка", detail: "Придуманный вариант решения проблемы." },
+      ],
+    },
+  ]);
+  assert.deepEqual(applied, base);
+});
+
+test("переписывание: добавленный вариант отклоняет всю находку", () => {
+  const base = findings();
+  const target = base[0];
+
+  const applied = applyRealityCheckRewrite(base, [
+    {
+      id: target.id,
+      conflict: "Описание конфликта, переписанное моделью живым языком.",
+      resolutions: [
+        ...target.resolutions.map((r) => ({
+          id: r.id,
+          title: "Переписанный заголовок",
+          detail: "Переписанное содержание варианта решения конфликта.",
+        })),
+        {
+          id: "invented-option",
+          title: "Новый вариант",
+          detail: "Вариант, который модель добавила от себя и которого не было.",
+        },
+      ],
+    },
+  ]);
+
+  assert.deepEqual(applied, base, "находка должна остаться детерминированной");
+});
+
+test("переписывание: потерянный вариант отклоняет всю находку", () => {
+  const base = findings();
+  const target = base[0];
+
+  const applied = applyRealityCheckRewrite(base, [
+    {
+      id: target.id,
+      conflict: "Описание конфликта, переписанное моделью живым языком.",
+      resolutions: target.resolutions.slice(1).map((r) => ({
+        id: r.id,
+        title: "Переписанный заголовок",
+        detail: "Переписанное содержание варианта решения конфликта.",
+      })),
+    },
+  ]);
+
+  assert.deepEqual(applied, base, "выброшенный моделью вариант должен вернуться");
+});
+
+test("переписывание: подменённый id варианта отклоняет находку", () => {
+  const base = findings();
+  const target = base[0];
+
+  const applied = applyRealityCheckRewrite(base, [
+    {
+      id: target.id,
+      conflict: "Описание конфликта, переписанное моделью живым языком.",
+      resolutions: target.resolutions.map((r, i) => ({
+        id: i === 0 ? "подменённый-id" : r.id,
+        title: "Переписанный заголовок",
+        detail: "Переписанное содержание варианта решения конфликта.",
+      })),
+    },
+  ]);
+
+  assert.deepEqual(applied, base);
+});
+
+/* ——— Грантовый трек (ЕНТ) ———————————————————————————————————————— */
+
+/** Профиль с баллом ЕНТ: остальное берём из базового. */
+function entProfile(entScore: number | undefined, overrides: Partial<Profile> = {}): Profile {
+  const base = baseProfile();
+  return baseProfile({
+    academics: { ...base.academics, entScore },
+    preferences: { ...base.preferences, countries: ["KZ"] },
+    ...overrides,
+  });
+}
+
+function budgetFactorFor(profile: Profile, programId: string) {
+  const program = getProgramById(programId)!;
+  return scoreProgram(profile, program).factors.find((f) => f.id === "budget")!;
+}
+
+test("грант: каталог знает порог для казахстанских программ вне автономных вузов", () => {
+  const kz = PROGRAMS.filter((p) => p.country === "KZ");
+  const withGrant = kz.filter((p) => p.costs.grant);
+
+  assert.ok(withGrant.length >= 10, `порог задан только у ${withGrant.length} программ`);
+  for (const program of withGrant) {
+    const grant = program.costs.grant!;
+    assert.ok(
+      grant.entThreshold >= 50 && grant.entThreshold <= 140,
+      `${program.id}: порог ${grant.entThreshold} вне шкалы ЕНТ`,
+    );
+    assert.ok(grant.note.length > 20, `${program.id}: порог без пояснения`);
+  }
+});
+
+test("грант: поле опционально — у зарубежных программ его нет", () => {
+  for (const program of PROGRAMS.filter((p) => p.country !== "KZ")) {
+    assert.equal(
+      program.costs.grant,
+      undefined,
+      `${program.id}: грантовый трек есть только у Казахстана`,
+    );
+  }
+});
+
+test("грант: балл выше порога с запасом — надёжный допуск", () => {
+  const program = getProgramById("kz-amu-med")!;
+  const threshold = program.costs.grant!.entThreshold;
+  const factor = budgetFactorFor(entProfile(threshold + 25), "kz-amu-med");
+
+  assert.ok(factor.grant, "разбор по гранту должен появиться");
+  assert.equal(factor.grant.likelihood, "reliable");
+  assert.equal(factor.grant.entThreshold, threshold);
+  assert.equal(factor.grant.gap, 25);
+  assert.ok(factor.detail.includes("надёжно"), `в тексте нет вывода: ${factor.detail}`);
+});
+
+test("грант: балл ровно на пороге — конкурентно, а не надёжно", () => {
+  const program = getProgramById("kz-amu-med")!;
+  const threshold = program.costs.grant!.entThreshold;
+  const factor = budgetFactorFor(entProfile(threshold), "kz-amu-med");
+
+  assert.equal(factor.grant?.likelihood, "competitive");
+  assert.equal(factor.grant?.gap, 0);
+  assert.ok(factor.detail.includes("конкурентно"));
+});
+
+test("грант: балл ниже порога — к конкурсу не допускают", () => {
+  const program = getProgramById("kz-amu-med")!;
+  const threshold = program.costs.grant!.entThreshold;
+  const factor = budgetFactorFor(entProfile(threshold - 1), "kz-amu-med");
+
+  assert.equal(factor.grant?.likelihood, "unlikely");
+  assert.equal(factor.grant?.gap, -1);
+  assert.ok(factor.detail.includes("маловероятно"));
+});
+
+test("грант: без балла ЕНТ вывода нет, но порог показывается", () => {
+  const factor = budgetFactorFor(entProfile(undefined), "kz-amu-med");
+  const threshold = getProgramById("kz-amu-med")!.costs.grant!.entThreshold;
+
+  assert.equal(factor.grant, undefined, "без балла сравнивать нечего");
+  assert.ok(
+    factor.detail.includes(String(threshold)),
+    `порог должен быть назван: ${factor.detail}`,
+  );
+});
+
+test("грант: у программы без трека разбора по гранту нет", () => {
+  const factor = budgetFactorFor(entProfile(120), "gb-manchester-cs");
+  assert.equal(factor.grant, undefined);
+});
+
+test("грант: восьмой фактор не появился", () => {
+  const match = scoreProgram(entProfile(120), getProgramById("kz-amu-med")!);
+  assert.equal(match.factors.length, 7);
+  const sum = match.factors.reduce((acc, f) => acc + f.weight, 0);
+  assert.ok(Math.abs(sum - 1) < 1e-9);
+});
+
+test("грант: честность — вывод не обещает поступление", () => {
+  const program = getProgramById("kz-aitu-cs")!;
+  const factor = budgetFactorFor(entProfile(140), "kz-aitu-cs");
+  const text = `${factor.detail} ${factor.grant?.note ?? ""} ${program.costs.grant!.note}`.toLowerCase();
+  for (const forbidden of ["гарант", "точно поступ", "100%", "обязательно получ"]) {
+    assert.ok(!text.includes(forbidden), `найдено обещание: ${forbidden}`);
+  }
+});
+
+test("маршрут: грантовая заявка появляется раньше основной подачи", () => {
+  const program = getProgramById("kz-satbayev-eng")!;
+  assert.ok(program.costs.grant, "программа для теста должна иметь грантовый трек");
+
+  const roadmap = buildRoadmap(entProfile(100), program);
+  const grantTask = roadmap.tasks.find((t) => t.id.endsWith("grant-apply"));
+  const submit = roadmap.tasks.find((t) => t.id.endsWith("application-submit"));
+
+  assert.ok(grantTask, "задача по грантовому конкурсу должна появиться");
+  assert.ok(submit, "основная подача должна остаться");
+  assert.ok(
+    (grantTask.dueDate ?? "") < (submit.dueDate ?? ""),
+    "грантовый дедлайн обязан быть раньше основного",
+  );
+  assert.ok(grantTask.why.length > 20);
+});
+
+test("маршрут: без грантового трека задачи по конкурсу нет", () => {
+  const roadmap = buildRoadmap(entProfile(100), getProgramById("gb-manchester-cs")!);
+  assert.equal(
+    roadmap.tasks.some((t) => t.id.endsWith("grant-apply")),
+    false,
+  );
+});
+
+test("валидация: costs с грантом и без гранта проходят схему", () => {
+  const program = getProgramById("kz-amu-med")!;
+  assert.equal(programSchema.safeParse(program).success, true);
+
+  const withoutGrant = {
+    ...program,
+    costs: { ...program.costs, grant: undefined },
+  };
+  assert.equal(programSchema.safeParse(withoutGrant).success, true);
+});
+
+test("валидация: битый грантовый блок отклоняется", () => {
+  const program = getProgramById("kz-amu-med")!;
+
+  assert.equal(
+    programSchema.safeParse({
+      ...program,
+      costs: { ...program.costs, grant: { entThreshold: 400, note: "порог вне шкалы" } },
+    }).success,
+    false,
+  );
+  assert.equal(
+    programSchema.safeParse({
+      ...program,
+      costs: { ...program.costs, grant: { entThreshold: 70 } },
+    }).success,
+    false,
+    "пояснение обязательно: порог без источника смысла не имеет",
   );
 });

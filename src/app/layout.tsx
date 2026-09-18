@@ -50,7 +50,7 @@ export default async function RootLayout({
   const catalog = await loadCatalogForRender();
 
   return (
-    <html lang="ru" suppressHydrationWarning>
+    <html lang="ru" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
       </head>

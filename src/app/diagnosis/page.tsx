@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/Primitives";
 import { RequireProfile } from "@/components/shell/RequireProfile";
 import { useJourney } from "@/lib/store/journey";
-import type { Diagnosis } from "@/lib/domain/types";
+import type { Diagnosis, RealityCheckFinding } from "@/lib/domain/types";
 
 /* ============================================================================
    ЭТАП 3 — ДИАГНОСТИКА
@@ -108,6 +108,11 @@ function DiagnosisView() {
               </div>
             </Card>
 
+            {/* Противоречия внутри самой анкеты */}
+            {diagnosis.realityChecks.length > 0 && (
+              <RealityCheckCard findings={diagnosis.realityChecks} />
+            )}
+
             {/* Сильные стороны и пробелы */}
             <div className="grid gap-4 md:grid-cols-2">
               <InsightColumn
@@ -143,6 +148,60 @@ function DiagnosisView() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Проверка реальности. Визуально отделена от «сильных сторон / пробелов»:
+ * там перечисление фактов, здесь — развилка, где абитуриенту нужно решить,
+ * какой из его же ответов главный. Поэтому вертикальный акцент, полоса
+ * «целевого» тона и варианты карточками, а не пунктами списка.
+ */
+function RealityCheckCard({ findings }: { findings: RealityCheckFinding[] }) {
+  return (
+    <Card className="relative overflow-hidden border-target/40 bg-target-soft/40 p-5 sm:p-6">
+      <div className="absolute inset-y-0 left-0 w-[3px] bg-target" aria-hidden />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Chip tone="target">Проверка реальности</Chip>
+        <Chip tone="neutral">
+          {findings.length === 1 ? "1 расхождение" : `${findings.length} расхождения`}
+        </Chip>
+      </div>
+
+      <p className="t-body mt-4 text-[14px] text-muted">
+        Эти ответы анкеты спорят друг с другом. Выбор остаётся за вами — мы показываем
+        развилку до того, как покажем университеты.
+      </p>
+
+      <div className="mt-5 space-y-5">
+        {findings.map((finding, index) => (
+          <div
+            key={finding.id}
+            className={index > 0 ? "border-t border-line pt-5" : undefined}
+          >
+            <p className="text-[15px] font-semibold leading-snug">{finding.title}</p>
+            <p className="t-body mt-1.5 text-[13.5px] text-muted">{finding.conflict}</p>
+
+            <Label className="mt-4 mb-2">Что можно сделать</Label>
+            <ul className="grid gap-2.5 sm:grid-cols-3">
+              {finding.resolutions.map((resolution, position) => (
+                <li
+                  key={resolution.id}
+                  className="rounded-[var(--r-sm)] border border-line bg-surface p-3.5"
+                >
+                  <Chip tone="neutral">Вариант {position + 1}</Chip>
+                  <p className="mt-2.5 text-[13.5px] font-semibold leading-snug">
+                    {resolution.title}
+                  </p>
+                  <p className="t-body mt-1 text-[13px] text-muted">{resolution.detail}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 

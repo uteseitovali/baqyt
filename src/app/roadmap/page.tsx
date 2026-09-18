@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import {
   BandBadge,
@@ -23,6 +24,7 @@ import { scoreProgram } from "@/lib/domain/scoring";
 import { COUNTRIES, PHASE_META, TASK_CATEGORIES } from "@/lib/domain/taxonomy";
 import { useJourney } from "@/lib/store/journey";
 import { cn, plural } from "@/lib/utils/cn";
+import { listContainer, listItem, railDraw } from "@/lib/motion/choreography";
 import type { RoadmapPhase, RoadmapTask } from "@/lib/domain/types";
 
 /* ============================================================================
@@ -42,6 +44,7 @@ export default function RoadmapPage() {
 }
 
 function RoadmapView() {
+  const reduce = useReducedMotion();
   const profile = useJourney((s) => s.profile);
   const activeProgramId = useJourney((s) => s.activeProgramId);
   const completedTasks = useJourney((s) => s.completedTasks);
@@ -207,8 +210,11 @@ function RoadmapView() {
           aria-label="Выполнено задач маршрута"
         >
           <div
-            className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out"
-            style={{ width: `${progress.percent}%` }}
+            className="h-full w-full origin-left rounded-full bg-accent"
+            style={{
+              transform: `scaleX(${progress.percent / 100})`,
+              transition: "transform var(--dur-slow) var(--ease-out)",
+            }}
           />
         </div>
       </Card>
@@ -224,10 +230,18 @@ function RoadmapView() {
                   <span className="t-label">{PHASE_META[phase].hint}</span>
                 </div>
 
-                <ol className="relative mt-4 space-y-2.5 pl-6">
-                  {/* Вертикальная маршрутная линия */}
-                  <span
-                    className="rail-dotted absolute left-[7px] top-2 bottom-2 w-px"
+                {/* Линия прочерчивается сверху вниз, задачи приезжают следом —
+                    тот же жест, что у маршрутной линии на первом экране. */}
+                <motion.ol
+                  className="relative mt-4 space-y-2.5 pl-6"
+                  variants={listContainer}
+                  initial={reduce ? false : "hidden"}
+                  whileInView="visible"
+                  viewport={{ once: true, amount: 0.15 }}
+                >
+                  <motion.span
+                    className="rail-dotted absolute left-[7px] top-2 bottom-2 w-px origin-top"
+                    variants={railDraw}
                     aria-hidden
                   />
                   {tasks.map((task) => (
@@ -239,7 +253,7 @@ function RoadmapView() {
                       onToggle={() => toggleTask(task.id)}
                     />
                   ))}
-                </ol>
+                </motion.ol>
               </section>
             ),
         )}
@@ -266,11 +280,13 @@ function TaskRow({
   onToggle: () => void;
 }) {
   return (
-    <li className="relative">
+    <motion.li className="relative" variants={listItem}>
       {/* Веха на линии */}
       <span
         className={cn(
-          "absolute -left-6 top-4 size-[15px] rounded-full border-2 transition-colors",
+          "absolute -left-6 top-4 size-[15px] rounded-full border-2",
+          "transition-[background-color,border-color,transform] duration-[var(--dur-base)] ease-[var(--ease-overshoot)]",
+          done && "scale-110",
           done
             ? "border-transparent bg-f-strong"
             : isNext
@@ -338,6 +354,6 @@ function TaskRow({
           </span>
         </div>
       </Card>
-    </li>
+    </motion.li>
   );
 }

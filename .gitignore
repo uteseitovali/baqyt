@@ -44,3 +44,5 @@ next-env.d.ts
 
 # screenshots from scripts/screenshots.mjs
 /screenshots
+/screenshots-before
+/screenshots-after

@@ -34,11 +34,21 @@ const requirementsSchema = z.object({
   expectedSubjects: z.array(z.string().max(80)).max(12).optional(),
 });
 
+/* Грантовый трек РК. Поле опционально: у зарубежных программ его нет, и
+   записи, созданные до появления трека, обязаны остаться валидными. Порог
+   ограничен шкалой ЕНТ (0–140) — значение вне шкалы означает битые данные,
+   а не строгий вуз. */
+const grantSchema = z.object({
+  entThreshold: z.number().min(0).max(140),
+  note: z.string().min(10).max(400),
+});
+
 const costsSchema = z.object({
   tuitionUSDPerYear: z.number().min(0).max(200_000),
   livingUSDPerYear: z.number().min(0).max(100_000),
   fundingAvailable: z.boolean(),
   fundingNote: z.string().max(400).optional(),
+  grant: grantSchema.optional(),
 });
 
 /* Объектная схема нужна отдельно от аннотированной: только у неё есть

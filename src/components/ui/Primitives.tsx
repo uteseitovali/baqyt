@@ -1,6 +1,15 @@
 "use client";
 
+import { useEffect } from "react";
+import {
+  animate,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from "motion/react";
 import { cn } from "@/lib/utils/cn";
+import { DUR, EASE } from "@/lib/motion/choreography";
 import type { AdmissionBand, DataConfidence, FactorStatus } from "@/lib/domain/types";
 import { BANDS } from "@/lib/domain/taxonomy";
 
@@ -21,8 +30,11 @@ export function Card({
     <div
       className={cn(
         "bg-surface border border-line rounded-[var(--r-md)]",
+        // Интерактивная карточка приподнимается — это единственное место, где
+        // система разрешает себе «физику» помимо маршрутных анимаций.
         interactive &&
-          "transition-[border-color,box-shadow,transform] duration-200 hover:border-line-strong hover:shadow-[var(--shadow-md)]",
+          "transition-[border-color,box-shadow,transform] duration-[var(--dur-base)] ease-[var(--ease-out)] " +
+            "hover:-translate-y-0.5 hover:border-line-strong hover:shadow-[var(--shadow-lg)]",
         className,
       )}
       {...props}
@@ -153,25 +165,43 @@ const STATUS_COLOR: Record<FactorStatus, string> = {
   weak: "var(--f-weak)",
 };
 
+/**
+ * Полоска фактора.
+ *
+ * Едет через scaleX, а не width: ширина заставляет браузер пересчитывать
+ * раскладку на каждый кадр, и при семи полосках в каждой из пятнадцати
+ * карточек это заметно. Разгон при появлении — CSS-анимация bar-sweep:
+ * она сама попадает под глобальный блок prefers-reduced-motion и не
+ * тащит за собой JS.
+ *
+ * delayMs выстраивает полоски в каскад, когда раскрывается разбор.
+ */
 export function FactorBar({
   value,
   status,
   className,
+  delayMs = 0,
 }: {
   value: number;
   status: FactorStatus;
   className?: string;
+  delayMs?: number;
 }) {
+  const filled = Math.min(1, Math.max(0, value));
+
   return (
     <div
       className={cn("h-1.5 w-full rounded-full bg-f-track overflow-hidden", className)}
       role="presentation"
     >
       <div
-        className="h-full rounded-full transition-[width,background-color] duration-500 ease-out"
+        className="h-full w-full origin-left rounded-full"
         style={{
-          width: `${Math.round(value * 100)}%`,
+          transform: `scaleX(${filled})`,
           backgroundColor: STATUS_COLOR[status],
+          transition:
+            "transform var(--dur-slow) var(--ease-out), background-color var(--dur-base) var(--ease-out)",
+          animation: `bar-sweep var(--dur-slow) var(--ease-out) ${delayMs}ms backwards`,
         }}
       />
     </div>
@@ -180,6 +210,13 @@ export function FactorBar({
 
 /* ——— Кольцо общего совпадения ————————————————————————————————————— */
 
+/**
+ * Кольцо общего совпадения.
+ *
+ * Заполняется при первом появлении и пересчитывается вместе с числом, когда
+ * меняется анкета: главная цифра экрана не должна просто подменяться — видно,
+ * что она именно доехала до нового значения.
+ */
 export function ScoreRing({
   score,
   size = 56,
@@ -189,9 +226,24 @@ export function ScoreRing({
   size?: number;
   label?: string;
 }) {
+  const reduce = useReducedMotion();
+  const target = Math.min(100, Math.max(0, score));
+
   const radius = (size - 6) / 2;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - Math.min(100, Math.max(0, score)) / 100);
+  const offset = circumference * (1 - target / 100);
+
+  // Цифра считается той же длительностью, что и дуга: они едут как одно целое.
+  const count = useMotionValue(reduce ? target : 0);
+  const rounded = useTransform(count, (value) => Math.round(value));
+
+  useEffect(() => {
+    const controls = animate(count, target, {
+      duration: reduce ? 0 : DUR.draw * 0.75,
+      ease: EASE.out,
+    });
+    return () => controls.stop();
+  }, [count, target, reduce]);
 
   return (
     <div
@@ -209,7 +261,7 @@ export function ScoreRing({
           strokeWidth={4}
           className="stroke-f-track"
         />
-        <circle
+        <motion.circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
@@ -218,13 +270,14 @@ export function ScoreRing({
           strokeLinecap="round"
           stroke="var(--accent)"
           strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 600ms cubic-bezier(.22,1,.36,1)" }}
+          initial={reduce ? false : { strokeDashoffset: circumference }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: reduce ? 0 : DUR.draw * 0.75, ease: EASE.out }}
         />
       </svg>
-      <span className="absolute inset-0 grid place-items-center t-num text-[15px] font-bold">
-        {Math.round(score)}
-      </span>
+      <motion.span className="absolute inset-0 grid place-items-center t-num text-[15px] font-bold">
+        {rounded}
+      </motion.span>
     </div>
   );
 }

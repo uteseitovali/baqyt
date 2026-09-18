@@ -1,9 +1,11 @@
-import { FACTOR_META, FACTOR_ORDER, FIELDS } from "./taxonomy";
+import { FACTOR_META, FACTOR_ORDER, FIELDS, GRANT_LIKELIHOOD } from "./taxonomy";
 import type {
   AdmissionBand,
   FactorId,
   FactorScore,
   FactorStatus,
+  GrantLikelihood,
+  GrantOutlook,
   MatchResult,
   Profile,
   Program,
@@ -142,14 +144,52 @@ function scoreAcademic(profile: Profile, program: Program) {
 
 /* ——— Фактор 3: бюджет ——————————————————————————————————————————— */
 
+/**
+ * Запас над порогом, после которого допуск перестаёт быть спорным.
+ * Десять баллов из 140 — примерно один сильный профильный вопрос: меньше
+ * этого называть допуск надёжным нечестно.
+ */
+const GRANT_COMFORT_GAP = 10;
+
+function grantLikelihood(gap: number): GrantLikelihood {
+  if (gap < 0) return "unlikely";
+  return gap < GRANT_COMFORT_GAP ? "competitive" : "reliable";
+}
+
+/**
+ * Сравнивает балл ЕНТ абитуриента с пороговым баллом грантового конкурса.
+ *
+ * Возвращает null там, где сравнивать нечего: у программы нет грантового
+ * трека или в анкете нет балла ЕНТ. Молчание честнее, чем вывод из пустоты.
+ */
+function grantOutlook(profile: Profile, program: Program): GrantOutlook | null {
+  const grant = program.costs.grant;
+  const entScore = profile.academics.entScore;
+  if (program.country !== "KZ" || !grant || entScore === undefined) return null;
+
+  const gap = entScore - grant.entThreshold;
+  const likelihood = grantLikelihood(gap);
+
+  return {
+    entThreshold: grant.entThreshold,
+    entScore,
+    gap,
+    likelihood,
+    note: GRANT_LIKELIHOOD[likelihood].description,
+  };
+}
+
 function scoreBudget(profile: Profile, program: Program) {
   const cap = profile.budget.annualTuitionUSD + profile.budget.livingCoveredUSD;
   const cost = program.costs.tuitionUSDPerYear + program.costs.livingUSDPerYear;
+  const grant = program.costs.grant;
+  const outlook = grantOutlook(profile, program);
 
   if (cost === 0) {
     return {
       score: 1,
       detail: "Программа бесплатная при поступлении на грант.",
+      grant: outlook ?? undefined,
     };
   }
 
@@ -177,7 +217,20 @@ function scoreBudget(profile: Profile, program: Program) {
     }
   }
 
-  return { score, detail };
+  /* Грант — не восьмой фактор, а второй способ оплатить тот же год, поэтому
+     живёт внутри бюджета. На оценку он влияет только когда допуск реален:
+     иначе обещанная «бесплатность» перевесила бы настоящую стоимость. */
+  if (grant) {
+    if (outlook) {
+      detail += ` Грант: ЕНТ ${outlook.entScore} против порога ${outlook.entThreshold} — ${GRANT_LIKELIHOOD[outlook.likelihood].label}.`;
+      if (outlook.likelihood === "reliable") score = clamp01(score + 0.15);
+      else if (outlook.likelihood === "competitive") score = clamp01(score + 0.07);
+    } else {
+      detail += ` Есть грантовый конкурс, порог ЕНТ — ${grant.entThreshold}; укажите свой балл, чтобы увидеть допуск.`;
+    }
+  }
+
+  return { score, detail, grant: outlook ?? undefined };
 }
 
 /* ——— Фактор 4: язык ————————————————————————————————————————————— */
@@ -366,7 +419,10 @@ function scoreLifestyle(profile: Profile, program: Program) {
 
 const CALCULATORS: Record<
   FactorId,
-  (p: Profile, pr: Program) => { score: number; detail: string }
+  (
+    p: Profile,
+    pr: Program,
+  ) => { score: number; detail: string; grant?: GrantOutlook }
 > = {
   field: scoreField,
   academic: scoreAcademic,
@@ -420,7 +476,7 @@ function collectBlockers(profile: Profile, program: Program): string[] {
 export function scoreProgram(profile: Profile, program: Program): MatchResult {
   const factors: FactorScore[] = FACTOR_ORDER.map((id) => {
     const meta = FACTOR_META[id];
-    const { score, detail } = CALCULATORS[id](profile, program);
+    const { score, detail, grant } = CALCULATORS[id](profile, program);
     const normalized = clamp01(score);
     return {
       id,
@@ -429,6 +485,7 @@ export function scoreProgram(profile: Profile, program: Program): MatchResult {
       weight: meta.weight,
       status: statusOf(normalized),
       detail,
+      grant,
     };
   });
 

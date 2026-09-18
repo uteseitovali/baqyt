@@ -2,6 +2,7 @@ import type {
   CountryId,
   FactorId,
   FieldId,
+  GrantLikelihood,
   JourneyStep,
   LanguageId,
   TaskCategory,
@@ -148,6 +149,36 @@ export const BANDS = {
     token: "reach",
   },
 } as const;
+
+/* ——— Допуск к грантовому конкурсу ———————————————————————————————— */
+
+/**
+ * Формулировки намеренно про ДОПУСК, а не про получение гранта: порог даёт
+ * право участвовать в конкурсе, исход конкурса им не определяется.
+ */
+export const GRANT_LIKELIHOOD: Record<
+  GrantLikelihood,
+  { label: string; description: string; token: "safe" | "target" | "reach" }
+> = {
+  reliable: {
+    label: "надёжно",
+    description:
+      "Балл заметно выше порога: допуск к конкурсу не под вопросом. Сам грант разыгрывается между всеми допущенными.",
+    token: "safe",
+  },
+  competitive: {
+    label: "конкурентно",
+    description:
+      "Балл у самого порога: к конкурсу допускают, но запаса нет — каждый дополнительный балл меняет позицию.",
+    token: "target",
+  },
+  unlikely: {
+    label: "маловероятно",
+    description:
+      "Балл ниже порога: к конкурсу на грант по этому направлению не допускают.",
+    token: "reach",
+  },
+};
 
 /* ——— Категории задач roadmap ————————————————————————————————————— */
 

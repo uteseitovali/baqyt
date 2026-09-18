@@ -187,9 +187,14 @@ export function JourneyRail() {
         aria-valuemax={100}
         aria-label="Общий прогресс маршрута"
       >
+        {/* Прогресс едет через scaleX и общий токен длительности:
+            та же кривая, что у полосок факторов и маршрутной линии. */}
         <div
-          className="h-full bg-accent transition-[width] duration-700 ease-out"
-          style={{ width: `${progressPercent}%` }}
+          className="h-full w-full origin-left bg-accent"
+          style={{
+            transform: `scaleX(${progressPercent / 100})`,
+            transition: "transform var(--dur-draw) var(--ease-out)",
+          }}
         />
       </div>
     </nav>

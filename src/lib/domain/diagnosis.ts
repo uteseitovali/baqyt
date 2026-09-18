@@ -1,12 +1,14 @@
 import { COUNTRIES, FIELDS, TRACKS } from "./taxonomy";
+import { detectRealityCheck } from "./realityCheck";
 import type { Diagnosis, DiagnosisItem, Profile } from "./types";
 
 /* ============================================================================
    ДИАГНОСТИКА ПРОФИЛЯ (детерминированная база)
 
    Этот модуль всегда даёт полный корректный разбор без обращения к LLM.
-   AI-слой поверх только переписывает headline и summary живым языком —
-   список сильных сторон и пробелов остаётся проверяемым и воспроизводимым.
+   AI-слой поверх только переписывает формулировки живым языком — состав
+   сильных сторон, пробелов и находок проверки реальности остаётся
+   проверяемым и воспроизводимым.
    ========================================================================= */
 
 const GPA_WORDS: Record<Profile["academics"]["gpaBand"], string> = {
@@ -237,6 +239,7 @@ export function buildDiagnosis(profile: Profile): Diagnosis {
     summary: buildSummary(profile),
     strengths: buildStrengths(profile),
     gaps: buildGaps(profile),
+    realityChecks: detectRealityCheck(profile),
     goal: buildGoal(profile),
     generatedBy: "rules",
   };

@@ -197,7 +197,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <main className="flex-1">{children}</main>
 
-      <footer className="mt-16 border-t border-line bg-sunken/60">
+      {/* Фактура бумаги ровно в двух местах: верх героя и низ подвала —
+          лист начинается и заканчивается, между ними её нет намеренно. */}
+      <footer className="grain-bottom relative mt-16 overflow-hidden border-t border-line bg-sunken/60">
         <div className="mx-auto w-full max-w-[var(--page-max)] px-4 py-8 sm:px-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="max-w-xl">

@@ -66,6 +66,20 @@
   --rail: 2px;
   --page-max: 1180px;
 
+  /* — хореография ———————————————————————————————————————————————
+     Одна ритмическая система на весь продукт. Жест у всего один:
+     маршрут прочерчивается по направлению движения, вехи приезжают
+     с перелётом и садятся на место. Те же значения продублированы
+     в src/lib/motion/choreography.ts для JS-анимаций (motion/react):
+     CSS и JS обязаны звучать одинаково. */
+  --dur-quick: 180ms;
+  --dur-base: 280ms;
+  --dur-slow: 420ms;
+  --dur-draw: 1150ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --ease-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1);
+
   /* — шрифты (self-hosted, fontsource) ————————————————————————— */
   --font-manrope: "Manrope Variable";
   --font-jetbrains: "JetBrains Mono Variable";
@@ -327,7 +341,8 @@ body {
   border-color: var(--line);
 }
 
-.grain::before {
+.grain::before,
+.grain-bottom::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -340,6 +355,14 @@ body {
   );
   background-size: 22px 22px;
   mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 20%, transparent 75%);
+}
+
+/* Бумага заканчивается там же, где началась: фактура стоит ровно в двух
+   местах — верх героя и низ подвала. Между ними её нет намеренно, иначе
+   она перестаёт читаться как край листа и становится шумом. */
+.grain-bottom::before {
+  opacity: 0.3;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 100%, #000 15%, transparent 78%);
 }
 
 /* Скрыть скроллбар у горизонтальных лент (мобильный rail) */
@@ -364,7 +387,18 @@ body {
 }
 
 .animate-rise {
-  animation: rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: rise var(--dur-slow) var(--ease-out) both;
+}
+
+/* ——— Разгон полоски фактора ————————————————————————————————————
+   Ключевого кадра «to» нет намеренно: конечное состояние — собственный
+   transform элемента, поэтому полоска доезжает ровно до своего значения,
+   а после (fill-mode: backwards) им же и управляется — правки анкеты
+   продолжают двигать её через transition. */
+@keyframes bar-sweep {
+  from {
+    transform: scaleX(0);
+  }
 }
 
 @keyframes shimmer {

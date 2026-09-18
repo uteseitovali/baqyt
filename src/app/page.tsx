@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card, Chip, Label } from "@/components/ui/Primitives";
+import { RouteMap } from "@/components/home/RouteMap";
 import { useJourney } from "@/lib/store/journey";
 import { CATALOG_META } from "@/lib/data/programs";
 import { JOURNEY } from "@/lib/domain/taxonomy";
@@ -79,38 +80,8 @@ export default function IntroPage() {
           </p>
         </div>
 
-        {/* Декоративная маршрутная линия */}
-        <svg
-          viewBox="0 0 400 200"
-          className="pointer-events-none absolute -right-10 top-10 hidden h-[300px] w-[420px] opacity-[0.55] lg:block"
-          aria-hidden
-        >
-          <path
-            d="M20 170 L110 120 L200 140 L290 60 L380 30"
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="1.5"
-            strokeDasharray="4 6"
-            opacity="0.5"
-          />
-          {[
-            [20, 170],
-            [110, 120],
-            [200, 140],
-            [290, 60],
-            [380, 30],
-          ].map(([cx, cy], i) => (
-            <circle
-              key={i}
-              cx={cx}
-              cy={cy}
-              r={i === 4 ? 7 : 4}
-              fill={i === 4 ? "var(--accent)" : "var(--canvas)"}
-              stroke="var(--accent)"
-              strokeWidth="2"
-            />
-          ))}
-        </svg>
+        {/* Сигнатурная маршрутная линия: семь вех — семь шагов пути */}
+        <RouteMap className="pointer-events-none absolute right-0 top-8 hidden h-[190px] w-[360px] opacity-[0.8] lg:block xl:h-[235px] xl:w-[460px]" />
       </section>
 
       {/* ——— Что получите ————————————————————————————————————————— */}

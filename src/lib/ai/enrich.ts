@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { completeStructured } from "./client";
-import type { Diagnosis, MatchResult, Profile } from "@/lib/domain/types";
+import type {
+  Diagnosis,
+  MatchResult,
+  Profile,
+  RealityCheckFinding,
+} from "@/lib/domain/types";
 import { FIELDS, COUNTRIES, TRACKS } from "@/lib/domain/taxonomy";
 
 /* ============================================================================
@@ -9,7 +14,8 @@ import { FIELDS, COUNTRIES, TRACKS } from "@/lib/domain/taxonomy";
    Что LLM НЕ делает:
      • не решает, какой университет выше в выдаче;
      • не придумывает баллы, стоимость и дедлайны;
-     • не создаёт список сильных сторон и пробелов.
+     • не создаёт список сильных сторон и пробелов;
+     • не добавляет, не убирает и не подменяет варианты в проверке реальности.
 
    Что LLM делает:
      • переписывает готовый разбор человеческим языком;
@@ -67,11 +73,10 @@ function describeProfile(profile: Profile): string {
     .join("\n");
 }
 
-/** Переписывает headline/summary/goal. Списки strengths и gaps не трогает. */
-export async function enrichDiagnosis(
+async function rewriteNarrative(
   profile: Profile,
   base: Diagnosis,
-): Promise<Diagnosis> {
+): Promise<{ headline: string; summary: string; goal: string } | null> {
   const user = `АНКЕТА АБИТУРИЕНТА:
 ${describeProfile(profile)}
 
@@ -97,13 +102,153 @@ goal — одно-два предложения о цели поступлени
     maxTokens: 700,
   });
 
-  if (!outcome.ok) return base;
+  return outcome.ok ? outcome.data : null;
+}
+
+/* ——— Проверка реальности ————————————————————————————————————————— */
+
+/**
+ * Схема ответа на переписывание находок. Форма — та же защита, что и в
+ * explanationsSchema: id приходят обратно, и всё, что не совпало с исходным
+ * набором, отбрасывается уже после парсинга.
+ */
+const realityCheckSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.string(),
+        conflict: z.string().min(40).max(600),
+        resolutions: z
+          .array(
+            z.object({
+              id: z.string(),
+              title: z.string().min(4).max(90),
+              detail: z.string().min(25).max(400),
+            }),
+          )
+          .min(2)
+          .max(3),
+      }),
+    )
+    .min(1),
+});
+
+export type RealityCheckRewrite = z.infer<typeof realityCheckSchema>["items"][number];
+
+/**
+ * Накладывает переписанные формулировки на детерминированные находки.
+ *
+ * Правило одно: LLM меняет только ТЕКСТ. Состав находок и состав вариантов
+ * задаёт домен. Поэтому находка принимает переписывание, только если модель
+ * вернула ровно те же id вариантов — ни одного нового, ни одного потерянного.
+ * Любое отклонение откатывает эту находку к исходному тексту целиком, а не
+ * частично: смешанный текст читался бы как согласованный, а он уже не он.
+ *
+ * Чистая функция — вся защита от галлюцинаций проверяется тестами без сети.
+ */
+export function applyRealityCheckRewrite(
+  base: RealityCheckFinding[],
+  items: RealityCheckRewrite[],
+): RealityCheckFinding[] {
+  const rewrites = new Map<string, RealityCheckRewrite>();
+  for (const item of items) {
+    // Дубль по id — тоже попытка что-то добавить: берём первое вхождение.
+    if (!rewrites.has(item.id)) rewrites.set(item.id, item);
+  }
+
+  return base.map((finding) => {
+    const rewrite = rewrites.get(finding.id);
+    if (!rewrite) return finding;
+
+    if (rewrite.resolutions.length !== finding.resolutions.length) return finding;
+
+    const byId = new Map(rewrite.resolutions.map((r) => [r.id, r]));
+    if (byId.size !== rewrite.resolutions.length) return finding;
+    if (finding.resolutions.some((r) => !byId.has(r.id))) return finding;
+
+    return {
+      ...finding,
+      conflict: rewrite.conflict,
+      // Порядок и id берём из домена, от модели — только слова.
+      resolutions: finding.resolutions.map((resolution) => ({
+        ...resolution,
+        title: byId.get(resolution.id)!.title,
+        detail: byId.get(resolution.id)!.detail,
+      })),
+    };
+  });
+}
+
+async function rewriteRealityChecks(
+  findings: RealityCheckFinding[],
+): Promise<RealityCheckFinding[] | null> {
+  if (findings.length === 0) return null;
+
+  const payload = findings
+    .map((finding) => {
+      const resolutions = finding.resolutions
+        .map((r) => `  - id: ${r.id} | ${r.title}: ${r.detail}`)
+        .join("\n");
+      return `id: ${finding.id}
+заголовок: ${finding.title}
+конфликт: ${finding.conflict}
+варианты:
+${resolutions}`;
+    })
+    .join("\n\n");
+
+  const user = `НАЙДЕННЫЕ ПРОТИВОРЕЧИЯ В АНКЕТЕ (посчитаны правилами):
+${payload}
+
+Перепиши каждое описание конфликта и каждый вариант выхода живым языком, обращаясь к абитуриенту на «вы».
+
+ЖЁСТКИЕ РАМКИ:
+- верни РОВНО те же id противоречий и РОВНО те же id вариантов, что получил;
+- не добавляй новых вариантов и не выбрасывай существующие;
+- не меняй суть варианта: «поднять бюджет» не может превратиться в «найти стипендию»;
+- сохрани все цифры и названия предметов ровно такими, какие они во входных данных;
+- не решай за абитуриента, какой вариант правильный.
+
+Формат: {"items": [{"id": "...", "conflict": "...", "resolutions": [{"id": "...", "title": "...", "detail": "..."}]}]}`;
+
+  const outcome = await completeStructured({
+    system: SYSTEM,
+    user,
+    schema: realityCheckSchema,
+    temperature: 0.4,
+    maxTokens: 1200,
+  });
+
+  if (!outcome.ok) return null;
+  return applyRealityCheckRewrite(findings, outcome.data.items);
+}
+
+/* ——— Сборка диагностики ——————————————————————————————————————————— */
+
+/**
+ * Переписывает headline/summary/goal и формулировки проверки реальности.
+ * Списки strengths, gaps и СОСТАВ находок остаются детерминированными.
+ * Если оба запроса к модели провалились, возвращается исходный разбор.
+ */
+export async function enrichDiagnosis(
+  profile: Profile,
+  base: Diagnosis,
+): Promise<Diagnosis> {
+  const [narrative, realityChecks] = await Promise.all([
+    rewriteNarrative(profile, base),
+    rewriteRealityChecks(base.realityChecks),
+  ]);
+
+  if (!narrative && !realityChecks) return base;
 
   return {
     ...base,
-    headline: outcome.data.headline,
-    summary: outcome.data.summary,
-    goal: outcome.data.goal,
+    headline: narrative?.headline ?? base.headline,
+    summary: narrative?.summary ?? base.summary,
+    goal: narrative?.goal ?? base.goal,
+    realityChecks: realityChecks ?? base.realityChecks,
+    // Честность важнее аккуратности ярлыка: если хоть один текст на экране
+    // написан моделью, интерфейс обязан это показать.
     generatedBy: "llm",
   };
 }

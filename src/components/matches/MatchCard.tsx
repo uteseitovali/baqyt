@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/Primitives";
 import { BANDS, COUNTRIES, FACTOR_META } from "@/lib/domain/taxonomy";
 import { cn, formatUSD } from "@/lib/utils/cn";
-import type { MatchResult } from "@/lib/domain/types";
+import { DUR, EASE } from "@/lib/motion/choreography";
+import type { AdmissionBand, MatchResult } from "@/lib/domain/types";
 
 /* ============================================================================
    Карточка рекомендации.
@@ -47,11 +48,11 @@ export function MatchCard({
     program.costs.tuitionUSDPerYear + program.costs.livingUSDPerYear;
 
   return (
-    <motion.div layout="position" transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>
+    <motion.div layout="position" transition={{ duration: DUR.slow, ease: EASE.out }}>
       <Card
         interactive
         className={cn(
-          "overflow-hidden",
+          "group overflow-hidden",
           match.blockers.length > 0 && "opacity-75",
           highlight && "border-accent-border",
         )}
@@ -67,9 +68,7 @@ export function MatchCard({
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="t-num text-[11px] font-bold text-faint">
-                  #{rank}
-                </span>
+                <WaypointBadge rank={rank} band={match.band} />
                 <BandBadge band={match.band} />
                 {program.costs.fundingAvailable && (
                   <Chip tone="neutral">стипендии</Chip>
@@ -157,7 +156,7 @@ export function MatchCard({
             <svg
               viewBox="0 0 12 12"
               className={cn(
-                "size-3 fill-none stroke-current transition-transform duration-200",
+                "size-3 fill-none stroke-current transition-transform duration-[var(--dur-base)] ease-[var(--ease-out)]",
                 expanded && "rotate-180",
               )}
               strokeWidth={1.8}
@@ -168,9 +167,13 @@ export function MatchCard({
 
           {/* Компактная сводка полосок — видна всегда, меняется при правках анкеты */}
           <div className="flex gap-1" aria-hidden>
-            {match.factors.map((factor) => (
+            {match.factors.map((factor, index) => (
               <div key={factor.id} className="flex-1" title={`${factor.label}: ${factor.detail}`}>
-                <FactorBar value={factor.score} status={factor.status} />
+                <FactorBar
+                  value={factor.score}
+                  status={factor.status}
+                  delayMs={index * 30}
+                />
               </div>
             ))}
           </div>
@@ -179,11 +182,11 @@ export function MatchCard({
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
-              transition={{ duration: 0.25 }}
+              transition={{ duration: DUR.base, ease: EASE.out }}
               className="overflow-hidden"
             >
               <ul className="mt-4 space-y-3.5">
-                {match.factors.map((factor) => (
+                {match.factors.map((factor, index) => (
                   <li key={factor.id}>
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="text-[13.5px] font-semibold">
@@ -198,6 +201,7 @@ export function MatchCard({
                       value={factor.score}
                       status={factor.status}
                       className="mt-1.5"
+                      delayMs={index * 45}
                     />
                     <p className="mt-1.5 text-[12.5px] leading-snug text-muted">
                       {factor.detail}
@@ -245,6 +249,37 @@ export function MatchCard({
         </div>
       </Card>
     </motion.div>
+  );
+}
+
+/** Цвет полосы поступления как чернила — тот же токен, что у чипа и кольца. */
+const BAND_INK: Record<AdmissionBand, string> = {
+  safe: "var(--band-safe)",
+  target: "var(--band-target)",
+  reach: "var(--band-reach)",
+};
+
+/**
+ * Веха маршрута вместо порядкового номера.
+ *
+ * Тот же знак, что в логотипе и на вертикальной линии маршрута: кольцо с
+ * точкой внутри. Номер в списке превращается в остановку на пути, а цвет
+ * кольца даёт полосу поступления ещё до чтения текста.
+ */
+function WaypointBadge({ rank, band }: { rank: number; band: AdmissionBand }) {
+  return (
+    <span
+      className={cn(
+        "t-num grid size-[26px] shrink-0 place-items-center rounded-full border-2 bg-surface",
+        "text-[11px] font-bold leading-none",
+        "transition-transform duration-[var(--dur-base)] ease-[var(--ease-overshoot)]",
+        "group-hover:scale-110",
+      )}
+      style={{ borderColor: BAND_INK[band], color: BAND_INK[band] }}
+      title={`Позиция в подборке: ${rank}`}
+    >
+      {rank}
+    </span>
   );
 }
 

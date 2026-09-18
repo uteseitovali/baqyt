@@ -24,6 +24,58 @@ function src(label: string, url: string) {
   return { label, url, checkedOn: CHECKED };
 }
 
+/* ——— Пороговые баллы конкурса на государственный грант РК ——————————
+
+   Источник: Правила присуждения образовательного гранта, ИПС «Әділет»,
+   https://adilet.zan.kz/rus/docs/V2300033345; пороги цикла 2026 года,
+   объявленные МНВО РК, — относительно 2025 года они не изменились.
+   Шкала ЕНТ — 0–140.
+
+   ЧТО ЭТО ЗА ЧИСЛО. Порог допуска к конкурсу, а не проходной балл гранта.
+   Ниже порога заявление на конкурс не принимают вовсе; выше — допускают
+   к нему наравне с остальными. Конкурсный балл по востребованным
+   направлениям каждый год оказывается заметно выше порога, и МНВО об этом
+   предупреждает отдельно. Поэтому и тип GrantTrack, и формулировки ниже
+   говорят строго о допуске: выдавать порог за проходной балл значило бы
+   показывать выдуманную точность, что кейс прямо запрещает.
+
+   Значения не выводятся из данных программы, а проставлены по категории
+   направления и статусу вуза — это решение составителя каталога, которое
+   видно в коде и проверяется тестами.
+   ——————————————————————————————————————————————————————————————————— */
+
+const GRANT_THRESHOLD_2026 = {
+  /** «Педагогические науки» и «Право». */
+  law: 75,
+  /** «Здравоохранение». */
+  health: 70,
+  /** Национальные вузы. */
+  national: 65,
+  /** Остальные вузы и направления. */
+  general: 50,
+} as const;
+
+type GrantCategory = keyof typeof GRANT_THRESHOLD_2026;
+
+const GRANT_CATEGORY_LABEL: Record<GrantCategory, string> = {
+  law: "по направлению «Право»",
+  health: "по направлению «Здравоохранение»",
+  national: "для национальных вузов",
+  general: "для вузов вне национальных",
+};
+
+/** Грантовый трек программы: порог конкурса плюс пояснение, что он значит. */
+function grant(category: GrantCategory) {
+  return {
+    entThreshold: GRANT_THRESHOLD_2026[category],
+    note:
+      `Порог допуска к конкурсу грантов 2026 года ${GRANT_CATEGORY_LABEL[category]} — ` +
+      `${GRANT_THRESHOLD_2026[category]} из 140 (МНВО РК). Порог открывает участие ` +
+      `в конкурсе, его исход решается отдельно: балл победителей по востребованным ` +
+      `направлениям обычно заметно выше.`,
+  };
+}
+
 export const PROGRAMS: Program[] = [
   /* ——————————————————————————— КАЗАХСТАН ——————————————————————————— */
   {
@@ -111,6 +163,7 @@ export const PROGRAMS: Program[] = [
       livingUSDPerYear: 3200,
       fundingAvailable: true,
       fundingNote: "Государственные гранты и скидки за высокий балл ЕНТ.",
+      grant: grant("general"),
     },
     applicationDeadlineMonth: 7,
     applicationDeadlineNote: "Подача после результатов ЕНТ.",
@@ -139,6 +192,7 @@ export const PROGRAMS: Program[] = [
       tuitionUSDPerYear: 4200,
       livingUSDPerYear: 3200,
       fundingAvailable: true,
+      grant: grant("general"),
     },
     applicationDeadlineMonth: 7,
     applicationDeadlineNote: "Подача после результатов ЕНТ.",
@@ -168,6 +222,7 @@ export const PROGRAMS: Program[] = [
       livingUSDPerYear: 3600,
       fundingAvailable: true,
       fundingNote: "Гранты и внутренние скидки за академические результаты.",
+      grant: grant("general"),
     },
     applicationDeadlineMonth: 7,
     applicationDeadlineNote: "Летнее окно после ЕНТ.",
@@ -196,6 +251,7 @@ export const PROGRAMS: Program[] = [
       tuitionUSDPerYear: 7000,
       livingUSDPerYear: 3600,
       fundingAvailable: true,
+      grant: grant("general"),
     },
     applicationDeadlineMonth: 7,
     applicationDeadlineNote: "Летнее окно после ЕНТ.",
@@ -224,6 +280,7 @@ export const PROGRAMS: Program[] = [
       tuitionUSDPerYear: 3800,
       livingUSDPerYear: 2800,
       fundingAvailable: true,
+      grant: grant("general"),
     },
     applicationDeadlineMonth: 7,
     applicationDeadlineNote: "Летнее окно после ЕНТ.",
@@ -253,6 +310,7 @@ export const PROGRAMS: Program[] = [
       livingUSDPerYear: 3600,
       fundingAvailable: true,
       fundingNote: "Внутренние стипендии по результатам вступительного теста.",
+      grant: grant("general"),
     },
     applicationDeadlineMonth: 6,
     applicationDeadlineNote: "Раннее и основное окна подачи.",
@@ -281,6 +339,7 @@ export const PROGRAMS: Program[] = [
       tuitionUSDPerYear: 6800,
       livingUSDPerYear: 3600,
       fundingAvailable: true,
+      grant: grant("law"),
     },
     applicationDeadlineMonth: 6,
     applicationDeadlineNote: "Раннее и основное окна подачи.",
@@ -309,6 +368,7 @@ export const PROGRAMS: Program[] = [
       tuitionUSDPerYear: 3600,
       livingUSDPerYear: 3400,
       fundingAvailable: true,
+      grant: grant("general"),
     },
     applicationDeadlineMonth: 7,
     applicationDeadlineNote: "Летнее окно после ЕНТ.",
@@ -338,6 +398,7 @@ export const PROGRAMS: Program[] = [
       livingUSDPerYear: 3200,
       fundingAvailable: true,
       fundingNote: "Значительная доля мест покрывается государственным грантом.",
+      grant: grant("national"),
     },
     applicationDeadlineMonth: 7,
     applicationDeadlineNote: "Летнее окно после ЕНТ.",
@@ -366,6 +427,7 @@ export const PROGRAMS: Program[] = [
       tuitionUSDPerYear: 2600,
       livingUSDPerYear: 3200,
       fundingAvailable: true,
+      grant: grant("national"),
     },
     applicationDeadlineMonth: 7,
     applicationDeadlineNote: "Летнее окно после ЕНТ.",
@@ -394,6 +456,7 @@ export const PROGRAMS: Program[] = [
       tuitionUSDPerYear: 3400,
       livingUSDPerYear: 3200,
       fundingAvailable: true,
+      grant: grant("health"),
     },
     applicationDeadlineMonth: 7,
     applicationDeadlineNote: "Летнее окно после ЕНТ.",

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils/cn";
+import { clampToRange } from "@/lib/domain/validation";
 import { Label } from "./Primitives";
 
 /* ============================================================================
@@ -75,23 +76,30 @@ export function OptionCard({
       )}
     >
       <span className="flex items-start gap-2.5">
+        {/* Форма отметки объявляет правило выбора: круг — один вариант,
+            квадрат — несколько. Одна и та же галочка на обоих шагах не давала
+            понять, можно ли выбрать второе направление. */}
         <span
           className={cn(
-            "mt-0.5 grid size-4 shrink-0 place-items-center rounded-[5px] border transition-colors",
+            "mt-0.5 grid size-4 shrink-0 place-items-center border transition-colors",
+            single ? "rounded-full" : "rounded-[5px]",
             selected ? "border-accent bg-accent" : "border-line-strong bg-transparent",
           )}
           aria-hidden
         >
-          {selected && (
-            <svg viewBox="0 0 10 8" className="size-2.5 fill-none stroke-on-accent">
-              <path
-                d="M1 4l2.5 2.5L9 1"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          )}
+          {selected &&
+            (single ? (
+              <span className="size-1.5 rounded-full bg-on-accent" />
+            ) : (
+              <svg viewBox="0 0 10 8" className="size-2.5 fill-none stroke-on-accent">
+                <path
+                  d="M1 4l2.5 2.5L9 1"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            ))}
         </span>
         <span className="min-w-0">
           <span
@@ -298,6 +306,14 @@ export function NumberField({
         onChange={(event) => {
           const raw = event.target.value;
           onChange(raw === "" ? undefined : Number(raw));
+        }}
+        /* Правим значение на уходе из поля, а не на каждой клавише: пока
+           набирают «700», «7» — это ещё не ответ, и подменять его на 400
+           прямо под курсором нельзя. */
+        onBlur={() => {
+          if (value === undefined || min === undefined || max === undefined) return;
+          const fixed = clampToRange(value, min, max);
+          if (fixed !== value) onChange(fixed);
         }}
         className={cn(
           "h-11 w-full rounded-[var(--r-sm)] border border-line bg-surface px-3.5",

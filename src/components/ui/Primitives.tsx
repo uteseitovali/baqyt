@@ -71,13 +71,17 @@ export function Chip({
   tone = "neutral",
   className,
   children,
+  title,
 }: {
   tone?: ChipTone;
   className?: string;
   children: React.ReactNode;
+  /** Подсказка при наведении — для чипов, где ярлык короче смысла. */
+  title?: string;
 }) {
   return (
     <span
+      title={title}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1",
         "text-[11.5px] font-semibold leading-none tracking-[-0.005em]",

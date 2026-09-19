@@ -2,14 +2,26 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { PROGRAMS, getProgramById } from "../src/lib/data/programs";
-import { rankPrograms, scoreProgram, balancedShortlist } from "../src/lib/domain/scoring";
+import {
+  balancedShortlist,
+  dominantFactorGap,
+  rankPrograms,
+  scoreProgram,
+} from "../src/lib/domain/scoring";
+import { FACTOR_META, FACTOR_ORDER } from "../src/lib/domain/taxonomy";
 import { buildDiagnosis } from "../src/lib/domain/diagnosis";
 import { buildRoadmap, nextAction, roadmapProgress } from "../src/lib/domain/roadmap";
 import { profileSchema } from "../src/lib/domain/validation";
 import { programSchema } from "../src/lib/data/schema";
 import { detectRealityCheck } from "../src/lib/domain/realityCheck";
 import { applyRealityCheckRewrite } from "../src/lib/ai/enrich";
-import type { Profile, RealityCheckFinding } from "../src/lib/domain/types";
+import type {
+  FactorId,
+  FactorScore,
+  MatchResult,
+  Profile,
+  RealityCheckFinding,
+} from "../src/lib/domain/types";
 
 /* ============================================================================
    Тесты доменного слоя.
@@ -755,4 +767,101 @@ test("валидация: битый грантовый блок отклоня�
     false,
     "пояснение обязательно: порог без источника смысла не имеет",
   );
+});
+
+/* ——— Разрыв между двумя вариантами ——————————————————————————————— */
+
+/**
+ * Синтетический результат подбора: задаём оценки факторов напрямую, а итог
+ * считаем из них же. Реальные программы тут не подходят — нужен контроль
+ * над каждым фактором, чтобы проверить именно арифметику взвешивания.
+ */
+function fakeMatch(scores: Partial<Record<FactorId, number>>, tag = "A"): MatchResult {
+  const factors: FactorScore[] = FACTOR_ORDER.map((id) => ({
+    id,
+    label: FACTOR_META[id].label,
+    score: scores[id] ?? 0.5,
+    weight: FACTOR_META[id].weight,
+    status: "ok" as const,
+    detail: `${tag}: объяснение фактора «${FACTOR_META[id].label}»`,
+  }));
+  const score = factors.reduce((sum, f) => sum + f.score * f.weight, 0) * 100;
+  return {
+    program: PROGRAMS[0],
+    score,
+    band: "target",
+    factors,
+    reasons: [],
+    watchouts: [],
+    blockers: [],
+  };
+}
+
+test("разрыв: возвращается фактор с наибольшим вкладом в отрыв", () => {
+  const leader = fakeMatch({ field: 1 }, "лидер");
+  const trailer = fakeMatch({}, "отстающий");
+
+  const gap = dominantFactorGap(leader, trailer);
+
+  assert.ok(gap, "при явном отрыве фактор должен быть найден");
+  assert.equal(gap.id, "field");
+  assert.ok(
+    gap.detail.startsWith("лидер:"),
+    "объяснение берётся у лидера — именно он опережает",
+  );
+});
+
+test("разрыв: у одинаковых результатов фактора нет", () => {
+  assert.equal(dominantFactorGap(fakeMatch({}), fakeMatch({})), null);
+});
+
+test("разрыв: отрыв меньше порога считается ничьей", () => {
+  // 0.04 по фактору с весом 0.06 — это 0.24 балла из 100.
+  const a = fakeMatch({ lifestyle: 0.54 });
+  const b = fakeMatch({});
+
+  assert.ok(Math.abs(a.score - b.score) < 1, "проверяем именно околоничью");
+  assert.equal(dominantFactorGap(a, b), null);
+});
+
+test("разрыв: при равной разнице решает вес фактора", () => {
+  // Одинаковый отрыв по сырой оценке: направление (вес 0.22) против
+  // условий (вес 0.06). Побеждает тот, чей вклад в итог больше.
+  const leader = fakeMatch({ field: 0.8, lifestyle: 0.8 }, "лидер");
+  const trailer = fakeMatch({ field: 0.5, lifestyle: 0.5 }, "отстающий");
+
+  assert.equal(dominantFactorGap(leader, trailer)?.id, "field");
+});
+
+test("разрыв: большой вес перевешивает больший сырой отрыв", () => {
+  // Условия: отрыв 0.4 × вес 0.06 = 0.024.
+  // Направление: отрыв 0.2 × вес 0.22 = 0.044 — оно и главное.
+  const leader = fakeMatch({ field: 0.7, lifestyle: 0.9 }, "лидер");
+  const trailer = fakeMatch({ field: 0.5, lifestyle: 0.5 }, "отстающий");
+
+  assert.equal(dominantFactorGap(leader, trailer)?.id, "field");
+});
+
+test("разрыв: порядок аргументов не меняет ответ", () => {
+  const leader = fakeMatch({ academic: 1 }, "лидер");
+  const trailer = fakeMatch({}, "отстающий");
+
+  const forward = dominantFactorGap(leader, trailer);
+  const backward = dominantFactorGap(trailer, leader);
+
+  assert.equal(forward?.id, "academic");
+  assert.deepEqual(backward, forward, "объяснение всегда у того, кто впереди");
+});
+
+test("разрыв: детерминирован на реальных программах", () => {
+  const profile = baseProfile();
+  const a = scoreProgram(profile, getProgramById("kz-aitu-cs")!);
+  const b = scoreProgram(profile, getProgramById("kz-amu-med")!);
+
+  const first = dominantFactorGap(a, b);
+  const second = dominantFactorGap(a, b);
+
+  assert.ok(first, "разные по смыслу программы должны иметь ведущий фактор");
+  assert.deepEqual(first, second);
+  assert.ok(first.detail.length > 10, "у фактора должно быть объяснение для UI");
 });

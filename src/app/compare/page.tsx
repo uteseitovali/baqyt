@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/Primitives";
 import { RequireProfile } from "@/components/shell/RequireProfile";
 import { getProgramsByIds } from "@/lib/data/programs";
-import { scoreProgram } from "@/lib/domain/scoring";
+import { dominantFactorGap, scoreProgram } from "@/lib/domain/scoring";
 import { COUNTRIES, LANGUAGES } from "@/lib/domain/taxonomy";
 import { useJourney } from "@/lib/store/journey";
 import { cn, formatUSD } from "@/lib/utils/cn";
@@ -180,6 +180,18 @@ function CompareView() {
     return raws.indexOf(target);
   }
 
+  /* Объяснение отрыва. Только для пары: на трёх вариантах «главная причина»
+     перестаёт существовать — у каждого свой ведущий фактор против каждого,
+     и одна фраза начала бы врать. Считаем без useMemo: хуки после раннего
+     возврата выше запрещены, а сама арифметика — семь умножений. */
+  const pair = matches.length === 2 ? matches : null;
+  const leader = pair
+    ? pair[0].score > pair[1].score
+      ? pair[0]
+      : pair[1]
+    : null;
+  const gapFactor = pair ? dominantFactorGap(pair[0], pair[1]) : null;
+
   function openRoadmap(programId: string) {
     setActiveProgram(programId);
     router.push("/roadmap");
@@ -208,6 +220,18 @@ function CompareView() {
           <p className="text-[13.5px] text-accent">
             Для сравнения нужен хотя бы второй вариант — добавьте его на экране
             рекомендаций.
+          </p>
+        </Card>
+      )}
+
+      {/* ——— Почему один вариант впереди ————————————————————————— */}
+      {leader && gapFactor && (
+        <Card className="mt-6 border-safe/30 bg-safe-soft/60 p-4 sm:p-5">
+          <Label className="mb-2">Главное отличие</Label>
+          <p className="t-body text-[13.5px] text-ink">
+            <span className="font-semibold">{leader.program.universityShort}</span>{" "}
+            опережает главным образом из-за фактора «{gapFactor.label}» —{" "}
+            <span className="text-muted">{gapFactor.detail}</span>
           </p>
         </Card>
       )}

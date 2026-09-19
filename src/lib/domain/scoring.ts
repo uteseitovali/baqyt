@@ -640,3 +640,54 @@ export function balancedShortlist(results: MatchResult[]): MatchResult[] {
   }
   return picked.slice(0, 3);
 }
+
+/* ——— Объяснение разрыва между двумя вариантами ——————————————————— */
+
+/**
+ * Ниже этого отрыва в общей оценке считаем, что варианты идут вровень.
+ * Один балл из ста — меньше, чем точность самих исходных данных каталога:
+ * называть «главную причину» отрыва в полбалла значит выдумывать точность.
+ */
+const SCORE_TIE_EPSILON = 1;
+
+/**
+ * Находит фактор, который сильнее всего развёл два варианта по итоговой оценке.
+ *
+ * Сравнивается вклад в итог (score × weight), а не сырая оценка: отрыв в 0.4 по
+ * «Условиям» (вес 0.06) весит меньше, чем отрыв в 0.2 по «Направлению»
+ * (вес 0.22), и пользователю важно именно второе.
+ *
+ * Порядок аргументов не важен: объяснение всегда берётся у того варианта,
+ * который впереди по общей оценке, — это его сильная сторона, и его detail
+ * читается в интерфейсе. При равной величине вклада побеждает фактор, стоящий
+ * раньше в FACTOR_ORDER, поэтому ответ детерминирован.
+ *
+ * Возвращает null, когда объяснять нечего: варианты идут вровень (в пределах
+ * SCORE_TIE_EPSILON) или у них нет общих факторов.
+ */
+export function dominantFactorGap(
+  a: MatchResult,
+  b: MatchResult,
+): FactorScore | null {
+  if (Math.abs(a.score - b.score) < SCORE_TIE_EPSILON) return null;
+
+  const [leader, trailer] = a.score > b.score ? [a, b] : [b, a];
+  const trailerById = new Map(trailer.factors.map((f) => [f.id, f]));
+
+  let best: FactorScore | null = null;
+  let bestDelta = 0;
+
+  for (const factor of leader.factors) {
+    const rival = trailerById.get(factor.id);
+    if (!rival) continue;
+
+    const delta = factor.score * factor.weight - rival.score * rival.weight;
+    // Строгое «больше» сохраняет порядок FACTOR_ORDER при равных вкладах.
+    if (delta > bestDelta) {
+      bestDelta = delta;
+      best = factor;
+    }
+  }
+
+  return best;
+}

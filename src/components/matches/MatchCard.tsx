@@ -12,7 +12,12 @@ import {
   Label,
   ScoreRing,
 } from "@/components/ui/Primitives";
-import { BANDS, COUNTRIES, FACTOR_META } from "@/lib/domain/taxonomy";
+import {
+  BANDS,
+  COUNTRIES,
+  FACTOR_META,
+  GRANT_LIKELIHOOD,
+} from "@/lib/domain/taxonomy";
 import { cn, formatUSD } from "@/lib/utils/cn";
 import { DUR, EASE } from "@/lib/motion/choreography";
 import type { AdmissionBand, MatchResult } from "@/lib/domain/types";
@@ -206,6 +211,21 @@ export function MatchCard({
                     <p className="mt-1.5 text-[12.5px] leading-snug text-muted">
                       {factor.detail}
                     </p>
+
+                    {/* Допуск к грантовому конкурсу — под-бейдж внутри бюджета,
+                        а не отдельная строка: это то же сравнение, только
+                        цифрами. Только вывод: цифры уже стоят в объяснении
+                        строкой выше, повторять их здесь — шум. Тон берётся
+                        из таксономии, чтобы совпадать с полосами поступления. */}
+                    {factor.grant && (
+                      <Chip
+                        tone={GRANT_LIKELIHOOD[factor.grant.likelihood].token}
+                        className="mt-2"
+                        title={GRANT_LIKELIHOOD[factor.grant.likelihood].description}
+                      >
+                        Грант — {GRANT_LIKELIHOOD[factor.grant.likelihood].label}
+                      </Chip>
+                    )}
                   </li>
                 ))}
               </ul>

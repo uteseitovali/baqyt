@@ -217,13 +217,17 @@ export function MatchesView() {
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
+        {/* Оба действия — кнопки одного размера: раньше слева стоял текст с
+            пунктирным подчёркиванием, справа — обведённая кнопка, и ряд читался
+            как случайно собранный из двух разных экранов. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
             onClick={() => setHideBlocked(!hideBlocked)}
-            className="text-[12.5px] font-semibold text-muted underline decoration-dotted underline-offset-4 transition-colors hover:text-ink"
           >
             {hideBlocked ? "Показать несовместимые" : "Скрыть несовместимые"}
-          </button>
+          </Button>
           <Button
             size="sm"
             variant="outline"

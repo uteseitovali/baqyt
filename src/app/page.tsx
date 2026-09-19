@@ -5,6 +5,7 @@ import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card, Chip, Label } from "@/components/ui/Primitives";
 import { RouteMap } from "@/components/home/RouteMap";
 import { useJourney } from "@/lib/store/journey";
+import { cn } from "@/lib/utils/cn";
 import { CATALOG_META } from "@/lib/data/programs";
 import { taxonomyFor } from "@/lib/domain/taxonomy";
 import { landing } from "@/lib/i18n/dictionaries/landing";
@@ -69,7 +70,10 @@ export default function IntroPage() {
         </div>
 
         {/* Сигнатурная маршрутная линия: семь вех — семь шагов пути */}
-        <RouteMap className="pointer-events-none absolute right-0 top-8 hidden h-[190px] w-[360px] opacity-[0.8] lg:block xl:h-[235px] xl:w-[460px]" />
+        {/* Линия заканчивается внутри полосы контента, а не под обрезом:
+            последняя веха — смысловой финал маршрута, и она не должна
+            упираться в край экрана. */}
+        <RouteMap className="pointer-events-none absolute right-4 top-8 hidden h-[190px] w-[360px] opacity-[0.8] lg:block xl:right-8 xl:h-[235px] xl:w-[460px]" />
       </section>
 
       {/* ——— Что получите ————————————————————————————————————————— */}
@@ -94,9 +98,23 @@ export default function IntroPage() {
         <Card className="overflow-hidden p-0">
           <ol className="divide-y divide-line sm:grid sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4">
             {journey.map((step, index) => (
+              /* Границы только между ячейками: сплошные border-b/border-r
+                 оставляли линию справа от последней колонки и под последним
+                 рядом — рамку, которая никуда не ведёт. */
               <li
                 key={step.id}
-                className="flex items-start gap-3.5 border-line p-5 sm:border-b lg:border-r"
+                className={cn(
+                  "flex items-start gap-3.5 border-line p-5",
+                  // 2 колонки: линия справа только у левой ячейки пары,
+                  // снизу — у всех, кроме последней.
+                  "sm:[&:not(:last-child)]:border-b",
+                  "sm:[&:nth-child(odd):not(:last-child)]:border-r",
+                  // 4 колонки: линия справа везде, кроме конца ряда и хвоста,
+                  // снизу — только у первого ряда.
+                  "lg:[&:nth-child(odd)]:border-r-0",
+                  "lg:[&:not(:nth-child(4n)):not(:last-child)]:border-r",
+                  "lg:[&:nth-child(n+5)]:border-b-0",
+                )}
               >
                 <span className="t-num mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border border-accent-border bg-accent-soft text-[11px] font-bold text-accent">
                   {index + 1}

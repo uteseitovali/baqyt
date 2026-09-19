@@ -1,7 +1,10 @@
 import { chromium } from "playwright";
 
 const OUT = process.env.SHOT_DIR ?? "./screenshots";
-const BASE = "http://localhost:3000";
+/* Порт берётся из окружения: `next dev` занимает следующий свободный, когда
+   3000 занят, и снимки молча уезжали бы с чужого сервера.
+   Запуск: SHOT_BASE=http://localhost:3001 node scripts/screenshots.mjs */
+const BASE = process.env.SHOT_BASE ?? "http://localhost:3000";
 
 const browser = await chromium.launch({ args: ["--no-sandbox"] });
 

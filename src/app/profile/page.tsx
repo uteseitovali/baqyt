@@ -68,7 +68,9 @@ export default function ProfilePage() {
 
   const currentYear = new Date().getFullYear();
 
-  /** Валидация текущего шага — кнопка «Далее» отключается осмысленно. */
+  /* Гейт шага: отключает «Далее». Текст причины живёт рядом с самим полем
+     (FieldBlock error) и не дублируется под карточкой — одна и та же фраза,
+     показанная дважды, читается как две разные ошибки. */
   const stepError = useMemo(() => {
     if (step === 3 && profile.preferences.fields.length === 0) {
       return "Выберите хотя бы одно направление — без этого подбор будет случайным.";
@@ -365,7 +367,7 @@ export default function ProfilePage() {
               hint="До четырёх направлений. Чем уже выбор, тем точнее подбор."
               error={
                 profile.preferences.fields.length === 0
-                  ? "Выберите хотя бы одно направление"
+                  ? "Выберите хотя бы одно направление — без этого подбор будет случайным."
                   : undefined
               }
             >
@@ -392,7 +394,7 @@ export default function ProfilePage() {
               hint="Можно выбрать несколько стран."
               error={
                 profile.preferences.countries.length === 0
-                  ? "Выберите хотя бы одну страну"
+                  ? "Выберите хотя бы одну страну."
                   : undefined
               }
             >
@@ -496,14 +498,11 @@ export default function ProfilePage() {
         )}
       </Card>
 
-      {stepError && (
-        <p className="mt-4 text-[13px] font-medium text-danger">{stepError}</p>
-      )}
-
       {/* ——— Навигация ————————————————————————————————————————— */}
       <div className="mt-6 flex items-center justify-between gap-3">
         <Button
           variant="ghost"
+          size="lg"
           onClick={() => {
             if (step === 0) {
               router.push("/");

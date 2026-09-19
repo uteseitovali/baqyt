@@ -11,7 +11,8 @@ import {
 import { FACTOR_META, FACTOR_ORDER } from "../src/lib/domain/taxonomy";
 import { buildDiagnosis } from "../src/lib/domain/diagnosis";
 import { buildRoadmap, nextAction, roadmapProgress } from "../src/lib/domain/roadmap";
-import { profileSchema } from "../src/lib/domain/validation";
+import { clampToRange, profileSchema, reviveProfile } from "../src/lib/domain/validation";
+import { createEmptyProfile } from "../src/lib/store/journey.state";
 import { programSchema } from "../src/lib/data/schema";
 import { detectRealityCheck } from "../src/lib/domain/realityCheck";
 import { applyRealityCheckRewrite } from "../src/lib/ai/enrich";
@@ -864,4 +865,157 @@ test("разрыв: детерминирован на реальных прог�
   assert.ok(first, "разные по смыслу программы должны иметь ведущий фактор");
   assert.deepEqual(first, second);
   assert.ok(first.detail.length > 10, "у фактора должно быть объяснение для UI");
+});
+
+/* ============================================================================
+   Восстановление профиля из недоверенного источника (localStorage).
+
+   Анкета, сохранённая прошлой версией приложения, переживает обновление кода:
+   zustand/persist кладёт её поверх начального состояния целиком, поэтому
+   отсутствующая секция превращалась в падение рендера, а значение вне
+   диапазона — в 422 от сервера уже после того, как человек прошёл всю анкету.
+   reviveProfile — единственное место, где эта починка живёт.
+   ========================================================================= */
+
+test("revive: профиль без секции academics достраивается, а не роняет экран", () => {
+  const stored = { ...baseProfile() } as Record<string, unknown>;
+  delete stored.academics;
+
+  const revived = reviveProfile(stored);
+
+  assert.equal(typeof revived.academics.gpaBand, "string");
+  assert.ok(Array.isArray(revived.academics.strongSubjects));
+  assert.equal(profileSchema.safeParse(revived).success, true);
+});
+
+test("revive: каждая отсутствующая секция восстанавливается по отдельности", () => {
+  for (const section of ["academics", "languages", "budget", "preferences"]) {
+    const stored = { ...baseProfile() } as Record<string, unknown>;
+    delete stored[section];
+
+    const revived = reviveProfile(stored);
+
+    assert.equal(
+      profileSchema.safeParse(revived).success,
+      true,
+      `профиль без ${section} должен восстанавливаться`,
+    );
+  }
+});
+
+test("revive: балл вне диапазона отбрасывается, а не уезжает на сервер", () => {
+  const revived = reviveProfile({
+    ...baseProfile(),
+    academics: { gpaBand: "high", satScore: 7, predictedIB: 3, strongSubjects: [] },
+  });
+
+  assert.equal(revived.academics.satScore, undefined);
+  assert.equal(revived.academics.predictedIB, undefined);
+  assert.equal(profileSchema.safeParse(revived).success, true);
+});
+
+test("revive: неизвестное направление или страна не проходят дальше хранилища", () => {
+  const revived = reviveProfile({
+    ...baseProfile(),
+    preferences: {
+      countries: ["KZ", "ATLANTIS"],
+      fields: ["cs", "underwater-basket-weaving"],
+      instructionLanguages: ["en"],
+      preferCloseToHome: false,
+      needsDorm: true,
+      campusPreference: "any",
+    },
+  });
+
+  assert.deepEqual(revived.preferences.countries, ["KZ"]);
+  assert.deepEqual(revived.preferences.fields, ["cs"]);
+  assert.equal(profileSchema.safeParse(revived).success, true);
+});
+
+test("revive: мусор вместо профиля даёт пустую анкету, а не исключение", () => {
+  for (const junk of [null, undefined, 42, "профиль", [], { grade: "одиннадцать" }]) {
+    const revived = reviveProfile(junk);
+    assert.equal(
+      profileSchema.safeParse(revived).success,
+      true,
+      `${JSON.stringify(junk)} должен дать валидную анкету`,
+    );
+  }
+});
+
+test("revive: корректный профиль проходит без изменений", () => {
+  const original = baseProfile({ note: "важна стипендия" });
+  assert.deepEqual(reviveProfile(original), original);
+});
+
+test("clamp: число вне диапазона подтягивается к границе, а не уезжает как есть", () => {
+  // Поле SAT объявляет min=400: «7» — это начало набора «700», а не ответ.
+  assert.equal(clampToRange(7, 400, 1600), 400);
+  assert.equal(clampToRange(9000, 400, 1600), 1600);
+  assert.equal(clampToRange(1200, 400, 1600), 1200);
+});
+
+test("clamp: пустое поле остаётся пустым — это «не сдавал», а не ноль", () => {
+  assert.equal(clampToRange(undefined, 400, 1600), undefined);
+  assert.equal(clampToRange(Number.NaN, 400, 1600), undefined);
+});
+
+test("clamp: результат для любого поля анкеты проходит схему профиля", () => {
+  const ranges = [
+    ["satScore", 400, 1600],
+    ["entScore", 0, 140],
+    ["predictedIB", 24, 45],
+  ] as const;
+
+  for (const [field, min, max] of ranges) {
+    for (const typed of [-5, 0, 7, 3, 999999]) {
+      const profile = baseProfile({
+        academics: {
+          gpaBand: "high",
+          strongSubjects: [],
+          [field]: clampToRange(typed, min, max),
+        } as Profile["academics"],
+      });
+      assert.equal(
+        profileSchema.safeParse(profile).success,
+        true,
+        `${field}=${typed} после clamp должен проходить схему`,
+      );
+    }
+  }
+});
+
+test("revive: отсутствующая секция берёт значения пустой анкеты, а не пустые списки", () => {
+  // Пустая анкета приходит со страной по умолчанию — человек открывает шаг
+  // «Направление» и видит Казахстан уже отмеченным. Потеря этого значения
+  // превращает первый же переход в «выберите хотя бы одну страну».
+  const empty = createEmptyProfile();
+  const stored = { ...baseProfile() } as Record<string, unknown>;
+  delete stored.preferences;
+
+  const revived = reviveProfile(stored);
+
+  assert.deepEqual(revived.preferences.countries, empty.preferences.countries);
+  assert.deepEqual(
+    revived.preferences.instructionLanguages,
+    empty.preferences.instructionLanguages,
+  );
+});
+
+test("revive: осознанно пустой список остаётся пустым", () => {
+  // Отличие от предыдущего теста: здесь ключ есть и он пуст — это ответ
+  // человека («снял все страны»), а не отсутствие данных.
+  const revived = reviveProfile({
+    ...baseProfile(),
+    preferences: {
+      countries: [],
+      fields: [],
+      instructionLanguages: [],
+      preferCloseToHome: false,
+      needsDorm: true,
+      campusPreference: "any",
+    },
+  });
+
+  assert.deepEqual(revived.preferences.countries, []);
 });

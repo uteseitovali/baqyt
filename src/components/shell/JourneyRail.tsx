@@ -88,7 +88,7 @@ export function JourneyRail() {
       <div className="mx-auto w-full max-w-[var(--page-max)] px-4 sm:px-6">
         <ol
           ref={listRef}
-          className="no-scrollbar flex items-center gap-0 overflow-x-auto py-2.5"
+          className="no-scrollbar rail-fade flex items-center gap-0 overflow-x-auto py-2.5 lg:[mask-image:none]"
         >
           {JOURNEY.map((step, index) => {
             const done = isDone(step.id);

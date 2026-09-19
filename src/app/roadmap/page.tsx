@@ -24,7 +24,7 @@ import { scoreProgram } from "@/lib/domain/scoring";
 import { COUNTRIES, PHASE_META, TASK_CATEGORIES } from "@/lib/domain/taxonomy";
 import { useJourney } from "@/lib/store/journey";
 import { cn, plural } from "@/lib/utils/cn";
-import { listContainer, listItem, railDraw } from "@/lib/motion/choreography";
+import { DUR, EASE, listContainer, listItem, railDraw } from "@/lib/motion/choreography";
 import type { RoadmapPhase, RoadmapTask } from "@/lib/domain/types";
 
 /* ============================================================================
@@ -107,7 +107,16 @@ function RoadmapView() {
       />
 
       {/* ——— Выбранная программа ————————————————————————————— */}
-      <Card className="mt-8 p-5 sm:p-6">
+      {/* Приезжает тем же жестом «снизу вверх», что и карточки списка, —
+          выбранная на прошлом экране программа узнаётся как та же самая.
+          Один элемент, а не каскад: остальное уже анимирует таймлайн. */}
+      <motion.div
+        className="mt-8"
+        initial={reduce ? false : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: DUR.slow, ease: EASE.out }}
+      >
+      <Card className="p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -127,6 +136,7 @@ function RoadmapView() {
           <ConfidenceTag confidence={program.dataConfidence} source={program.source} />
         </div>
       </Card>
+      </motion.div>
 
       {/* ——— ЭТАП 7: следующее действие ——————————————————————— */}
       <section id="next" className="mt-6 scroll-mt-32">

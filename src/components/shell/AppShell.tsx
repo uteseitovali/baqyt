@@ -172,6 +172,9 @@ function AccountButton() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isIntro = pathname === "/";
+  // По ссылке «Показать семье» приходит человек без анкеты: маршрутная лента
+  // предлагала бы ему «шаг 1 из 7» чужого пути.
+  const isShared = pathname === "/shared" || pathname.startsWith("/shared/");
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -189,7 +192,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {!isIntro && (
+      {!isIntro && !isShared && (
         <div className="sticky top-[57px] z-30">
           <JourneyRail />
         </div>

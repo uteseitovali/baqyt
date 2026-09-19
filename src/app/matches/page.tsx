@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import {
@@ -13,6 +13,7 @@ import {
 import { RequireProfile } from "@/components/shell/RequireProfile";
 import { MatchCard } from "@/components/matches/MatchCard";
 import { TweakPanel } from "@/components/matches/TweakPanel";
+import { SharePanel } from "@/components/share/SharePanel";
 import { getCatalog } from "@/lib/data/programs";
 import { balancedShortlist, rankPrograms } from "@/lib/domain/scoring";
 import { useJourney } from "@/lib/store/journey";
@@ -108,9 +109,22 @@ export function MatchesView() {
     }
   }
 
+  /* Переход не блокируется и не откладывается: router.push уходит сразу.
+     Пока страница маршрута грузится (isNavigating), выбранная карточка
+     подсвечена, остальные отступают, кнопка честно пишет, что происходит.
+     Как только переход завершился или сорвался, флаг гаснет сам. */
+  const [isNavigating, startNavigation] = useTransition();
+  const [openingId, setOpeningId] = useState<string | null>(null);
+
   function openRoadmap(programId: string) {
     setActiveProgram(programId);
-    router.push("/roadmap");
+    setOpeningId(programId);
+    startNavigation(() => router.push("/roadmap"));
+  }
+
+  function phaseOf(programId: string): "idle" | "opening" | "receding" {
+    if (!isNavigating || openingId === null) return "idle";
+    return openingId === programId ? "opening" : "receding";
   }
 
   const counts = useMemo(
@@ -123,8 +137,17 @@ export function MatchesView() {
     [allMatches],
   );
 
+  const openingTitle = isNavigating
+    ? allMatches.find((m) => m.program.id === openingId)?.program.program
+    : undefined;
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+      {/* Один живой регион на страницу — а не по одному на кнопку. */}
+      <p role="status" className="sr-only">
+        {openingTitle ? `Открываем маршрут: ${openingTitle}` : ""}
+      </p>
+
       <SectionHeading
         label="Этап 4 · Рекомендации"
         title="Программы под ваш профиль"
@@ -241,6 +264,7 @@ export function MatchesView() {
               inShortlist={shortlist.includes(match.program.id)}
               onToggleShortlist={() => toggleShortlist(match.program.id)}
               onBuildRoadmap={() => openRoadmap(match.program.id)}
+              phase={phaseOf(match.program.id)}
               highlight={
                 balancedIds.has(match.program.id) && index < 6
                   ? `Кандидат в полосу «${
@@ -256,6 +280,13 @@ export function MatchesView() {
           ))
         )}
       </div>
+
+      {/* ——— Показать семье ————————————————————————————————————— */}
+      {allMatches.length > 0 && (
+        <div className="mt-8">
+          <SharePanel matches={allMatches} />
+        </div>
+      )}
 
       {/* ——— Нижняя навигация ————————————————————————————————— */}
       {visible.length > 0 && (

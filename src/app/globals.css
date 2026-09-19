@@ -248,6 +248,20 @@ html {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+
+  /* Герой (RouteMap): исходное скрытое состояние вшито в серверный HTML и в
+     inline-стили motion/react, а JS узнаёт о предпочтении только после
+     гидрации. !important здесь оправдан — он перекрывает именно inline-стили. */
+  .route-map mask path {
+    stroke-dashoffset: 0 !important;
+  }
+  .route-map circle {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .route-map .route-pulse {
+    display: none;
+  }
 }
 
 body {

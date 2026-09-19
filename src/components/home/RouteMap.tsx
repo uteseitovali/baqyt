@@ -9,6 +9,7 @@ import {
   useTransform,
 } from "motion/react";
 import { DUR, EASE, SPRING_WAYPOINT, STAGGER } from "@/lib/motion/choreography";
+import { cn } from "@/lib/utils/cn";
 
 /* ============================================================================
    СИГНАТУРНЫЙ ЭЛЕМЕНТ ГЕРОЯ — маршрутная линия
@@ -18,11 +19,19 @@ import { DUR, EASE, SPRING_WAYPOINT, STAGGER } from "@/lib/motion/choreography";
    странице, а на маршруте — пунктирная вертикаль между задачами. Один жест
    в четырёх местах.
 
-   Хореография (одна на всю систему, см. lib/motion/choreography.ts):
+   Хореография (одна на всю систему, см. lib/motion/choreography.ts), всё
+   вместе — около 1.2 с, один раз при загрузке:
      1. линия прочерчивается слева направо — маской по stroke-dashoffset,
         чтобы сохранить пунктир самой линии;
      2. вехи приезжают вслед за головой линии, каждая с перелётом;
-     3. точка назначения трижды пульсирует и успокаивается.
+     3. когда садится последняя, точка назначения звенит один раз.
+
+   Reduced motion. Сервер не знает предпочтения пользователя, поэтому в
+   серверный HTML попадает скрытое исходное состояние (offset 480, вехи с
+   opacity 0). JS-ветка useReducedMotion срабатывает только после гидрации —
+   до неё человек видел бы пустое место. Поэтому финальное состояние
+   закреплено ещё и в CSS-блоке prefers-reduced-motion (globals.css, классы
+   .route-map / .route-pulse): карта на месте с первого кадра.
 
    Пунктир держим маской, а не dasharray самой линии: dasharray уже занят
    под рисунок пунктира, вторая роль на том же свойстве не помещается.
@@ -87,13 +96,14 @@ export function RouteMap({ className }: { className?: string }) {
   const pinY = useTransform(smoothY, (v) => v * 10);
 
   /** Момент, когда голова линии доходит до вехи. */
-  const arrival = (index: number) => 0.12 + index * STAGGER.waypoint;
-  const drawEnd = arrival(WAYPOINTS.length - 1) + 0.2;
+  const arrival = (index: number) => 0.1 + index * STAGGER.waypoint;
+  /** Последняя веха садится — в этот момент звенит кольцо назначения. */
+  const landing = arrival(WAYPOINTS.length - 1);
 
   return (
     <svg
       viewBox="0 0 440 220"
-      className={className}
+      className={cn("route-map", className)}
       aria-hidden
       focusable="false"
     >
@@ -112,7 +122,11 @@ export function RouteMap({ className }: { className?: string }) {
             style={{ strokeDasharray: ROUTE_LENGTH }}
             initial={reduce ? false : { strokeDashoffset: ROUTE_LENGTH }}
             animate={{ strokeDashoffset: 0 }}
-            transition={{ duration: DUR.draw, ease: EASE.out }}
+            // Короче общего DUR.draw (он у кольца оценки и линии маршрута): вся
+            // вводная анимация героя обязана уложиться в ~1.2 с, а голова линии
+            // должна опережать вехи — к моменту посадки последней (≈0.52 с)
+            // прочерчено уже ≈97% пути.
+            transition={{ duration: DUR.draw * 0.7, ease: EASE.out }}
           />
         </mask>
       </defs>
@@ -154,9 +168,11 @@ export function RouteMap({ className }: { className?: string }) {
           );
         })}
 
-        {/* Точка назначения отзванивается три раза и затихает. */}
+        {/* Точка назначения отзванивается один раз, когда садится последняя
+            веха, — и на этом вводная анимация заканчивается. */}
         {!reduce && (
           <motion.circle
+            className="route-pulse"
             cx={DESTINATION[0]}
             cy={DESTINATION[1]}
             r={7}
@@ -166,13 +182,7 @@ export function RouteMap({ className }: { className?: string }) {
             style={{ transformBox: "fill-box", transformOrigin: "center" }}
             initial={{ scale: 1, opacity: 0 }}
             animate={{ scale: [1, 2.6], opacity: [0.45, 0] }}
-            transition={{
-              duration: 1.3,
-              ease: EASE.out,
-              delay: drawEnd,
-              repeat: 2,
-              repeatDelay: 0.8,
-            }}
+            transition={{ duration: 0.5, ease: EASE.out, delay: landing }}
           />
         )}
       </motion.g>

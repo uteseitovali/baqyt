@@ -32,6 +32,14 @@ export async function GET() {
         ? "Каталог и профили читаются из Postgres; при сбое — откат в статический срез."
         : "DATABASE_URL не задан: каталог статический, состояние пути живёт в localStorage.",
     },
+    share: {
+      /* "stored" — ссылка «Показать семье» живёт 30 дней на сервере;
+         "inline" — сводка зашита в адрес, сервер её не хранит. */
+      mode: dbEnabled ? "stored" : "inline",
+      note: dbEnabled
+        ? "Сводки хранятся в Postgres 30 дней; если база не ответила, ссылка кодируется в адрес."
+        : "DATABASE_URL не задан: сводка кодируется прямо в адрес, сервер её не хранит.",
+    },
     ai: {
       enabled: isAIEnabled(),
       model: isAIEnabled() ? process.env.AI_MODEL || "gpt-4o-mini" : null,

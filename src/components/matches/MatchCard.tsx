@@ -38,6 +38,7 @@ export function MatchCard({
   onToggleShortlist,
   onBuildRoadmap,
   highlight,
+  phase = "idle",
 }: {
   match: MatchResult;
   rank: number;
@@ -46,6 +47,11 @@ export function MatchCard({
   onToggleShortlist: () => void;
   onBuildRoadmap: () => void;
   highlight?: string;
+  /**
+   * Переход к маршруту: «opening» — эта карточка выбрана и страница
+   * открывается, «receding» — выбрана другая, эта отступает на второй план.
+   */
+  phase?: "idle" | "opening" | "receding";
 }) {
   const [expanded, setExpanded] = useState(false);
   const { program } = match;
@@ -53,13 +59,23 @@ export function MatchCard({
     program.costs.tuitionUSDPerYear + program.costs.livingUSDPerYear;
 
   return (
-    <motion.div layout="position" transition={{ duration: DUR.slow, ease: EASE.out }}>
+    <motion.div
+      layout="position"
+      transition={{ duration: DUR.slow, ease: EASE.out }}
+      // Отступание — обычный CSS-переход прозрачности: его гасит глобальный
+      // блок prefers-reduced-motion, отдельной ветки для него не нужно.
+      className={cn(
+        "transition-opacity duration-[var(--dur-base)] ease-[var(--ease-out)]",
+        phase === "receding" && "opacity-55",
+      )}
+      aria-busy={phase === "opening" || undefined}
+    >
       <Card
         interactive
         className={cn(
           "group overflow-hidden",
           match.blockers.length > 0 && "opacity-75",
-          highlight && "border-accent-border",
+          (highlight || phase === "opening") && "border-accent-border",
         )}
       >
         {highlight && (
@@ -255,8 +271,14 @@ export function MatchCard({
 
           {/* ——— Действия ——————————————————————————————————————— */}
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button size="sm" onClick={onBuildRoadmap}>
-              Построить маршрут
+            <Button
+              size="sm"
+              onClick={onBuildRoadmap}
+              disabled={phase !== "idle"}
+              // «Идёт открытие» не должно выглядеть как «недоступно».
+              className={phase === "opening" ? "disabled:opacity-100" : undefined}
+            >
+              {phase === "opening" ? "Открываем маршрут…" : "Построить маршрут"}
             </Button>
             <Button
               size="sm"

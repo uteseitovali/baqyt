@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { Profile, StepId } from "@/lib/domain/types";
 import { createEmptyProfile, DEMO_PROFILE } from "./journey.state";
+import { reviveProfile } from "@/lib/domain/validation";
 import { SHORTLIST_LIMIT, type JourneySnapshot } from "@/lib/sync/merge";
 
 export { createEmptyProfile };
@@ -216,6 +217,20 @@ export const useJourney = create<JourneyState>()(
           ...(persisted as object),
           updatedAt: new Date().toISOString(),
         } as JourneyState;
+      },
+      /* persist кладёт сохранённое состояние поверх начального целиком, а не
+         по полям: анкета, записанная прошлой версией приложения, доезжает до
+         компонентов как есть. Недостающая секция роняла рендер, а значение
+         вне диапазона возвращалось с сервера как 422 уже после всех пяти
+         шагов. Профиль — единственная часть состояния, приходящая из
+         localStorage со своей формой, поэтому чиним ровно её. */
+      merge: (persisted, current) => {
+        const stored = (persisted ?? {}) as Partial<JourneyState>;
+        return {
+          ...current,
+          ...stored,
+          profile: reviveProfile(stored.profile),
+        };
       },
       partialize: (s) => ({
         profile: s.profile,
